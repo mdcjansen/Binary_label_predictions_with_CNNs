@@ -5,13 +5,16 @@ import shutil
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.3"
-__date__ = "26/10/2023"
+__version__ = "1.4"
+__date__ = "27/10/2023"
 
 # paths
-sorted_folder = r"D:\PyCharm projects\ErasmusMC\sorted_files"
-folder_to_sort = r"D:\PyCharm projects\ErasmusMC\sort_folder"
-destination = r"D:\PyCharm projects\ErasmusMC\sort_folder"
+sorted_folder = r"D:\path\to\sorted_folder"
+folder_to_sort = r"D:\path\to\folder_to_sort"
+destination = r"D:\path\to\destination_folder"
+
+suffix_sf = ".suffix_sorted_folder"
+suffix_fts = ".suffix_folder_to_sort"
 
 sorted_files = []
 
@@ -24,7 +27,7 @@ if __name__ == "__main__":
     # listing all previously sorted files
     for (dirpath, dirnames, filenames) in os.walk(sorted_folder):
         sorted_files.extend(filenames)
-    sorted_files_sc = [suffix.replace(".png.txt", ".txt.txt") for suffix in sorted_files]
+    sorted_files_sc = [suffix.replace(suffix_sf, suffix_fts) for suffix in sorted_files]
 
     # print("SORTED_FILES:\t\t", sorted_files)
     # print("SORTED_FILES_SC:\t", sorted_files_sc, "\n")
