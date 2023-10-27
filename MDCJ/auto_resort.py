@@ -1,21 +1,24 @@
 #!/usr/bin/env python
 
 import os
+import sys
 import shutil
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.4"
+__version__ = "1.5"
 __date__ = "27/10/2023"
 
-# paths
+# Folder paths
 sorted_folder = r"D:\path\to\sorted_folder"
 folder_to_sort = r"D:\path\to\folder_to_sort"
 destination = r"D:\path\to\destination_folder"
 
+# File suffixes
 suffix_sf = ".suffix_sorted_folder"
 suffix_fts = ".suffix_folder_to_sort"
 
+# List of files
 sorted_files = []
 
 if __name__ == "__main__":
@@ -29,18 +32,12 @@ if __name__ == "__main__":
         sorted_files.extend(filenames)
     sorted_files_sc = [suffix.replace(suffix_sf, suffix_fts) for suffix in sorted_files]
 
-    # print("SORTED_FILES:\t\t", sorted_files)
-    # print("SORTED_FILES_SC:\t", sorted_files_sc, "\n")
-
     # finding and moving previously filtered files
     for (dirpath, dirnames, filenames) in os.walk(folder_to_sort):
         if len(dirnames) == 0:
-            # print("DIRPATH:\t\t", dirpath)
-            # print("DIRFILES:\t\t", filenames)
             for i in range(0, len(filenames)):
                 if filenames[i] in sorted_files_sc:
                     if filenames[i] != "exclude_specific_file":
-                        print("MATCHEDFILE:\t {dp}\{dr}".format(dp=dirpath, dr=filenames[i]))
-                        # shutil.copy("{dp}\{dr}".format(dp=dirpath, dr=filenames[i]), destination)
-                        # shutil.move("{dp}\{dr}".format(dp=dirpath, dr=filenames[i]), destination)
-            print("")
+                        print("MATCHEDFILE:\t{dp}\{dr}".format(dp=dirpath, dr=filenames[i]))
+                        shutil.move("{dp}\{dr}".format(dp=dirpath, dr=filenames[i]), destination)
+    sys.exit(0)
