@@ -6,7 +6,7 @@ import sys
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.1"
+__version__ = "1.2"
 __date__ = "31/10/2023"
 
 # Folder paths
@@ -67,7 +67,7 @@ if __name__ == "__main__":
                             extract_cx = int(filenames[i].split(",")[1].replace("x=", ""))
                             extract_cy = int(filenames[i].split(",")[2].replace("y=", ""))
                             extract_cw = int(filenames[i].split(",")[3].replace("w=", ""))
-                            extract_ch = int(filenames[i].split(",")[4].replace("h=", "").replace("].txt", ""))
+                            extract_ch = int(filenames[i].split(",")[4].replace("h=", "").replace(suffix, ""))
                             extract_cx_end = extract_cx + extract_cw
                             extract_cy_end = extract_cy - extract_ch
                             extract(extract_cx, extract_cy, extract_cx_end, extract_cy_end)
