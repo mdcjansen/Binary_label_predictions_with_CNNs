@@ -2,11 +2,10 @@
 
 import os
 import shutil
-import sys
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.2"
+__version__ = "1.3"
 __date__ = "31/10/2023"
 
 # Folder paths
@@ -37,7 +36,7 @@ def extract(file_info, source_folder, dest_folder):
                         (cy >= extract_cy >= cy - ch or cy >= extract_cy_end >= cy - ch):
                     source_path = os.path.join(root, filename)
                     dest_path = os.path.join(dest_folder, filename)
-                    # shutil.move(source_path, dest_path)
+                    shutil.move(source_path, dest_path)
                     print("EXTRACTED:\t", filename)
 
 
