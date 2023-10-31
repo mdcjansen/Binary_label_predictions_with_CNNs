@@ -15,61 +15,47 @@ extract_folder = r"D:\path\to\extract_folder"
 filter_dest = r"D:\path\to\filter_destination"
 
 # Variables
-sorted_files = []
-suffix = "].txt"
-
-
-# Function to identify file to sort
-def sort_file(fileno):
-    global sort_file_id, sort_file_cx, sort_file_cy, sort_file_cw, sort_file_ch, sort_file_cx_end, sort_file_cy_end
-    for (dirpath, dirnames, filenames) in os.walk(sorted_folder):
-        sort_file_id = filenames[fileno].split()[0]
-        sort_file_cx = int(filenames[fileno].split(",")[1].replace("x=", ""))
-        sort_file_cy = int(filenames[fileno].split(",")[2].replace("y=", ""))
-        sort_file_cw = int(filenames[fileno].split(",")[3].replace("w=", ""))
-        sort_file_ch = int(filenames[fileno].split(",")[4].replace("h=", "").replace(suffix, ""))
-        sort_file_cx_end = sort_file_cx + sort_file_cw
-        sort_file_cy_end = sort_file_cy - sort_file_ch
+suffix_sort = "].txt"
+suffix_extract = "].txt"
 
 
 # Function to extract file
-def extract(cx, cy, cx_end, cy_end):
-    if cx in range(sort_file_cx, sort_file_cx_end):
-        if cy in range(sort_file_cy_end, sort_file_cy):
-            shutil.move("{dp}\{fi}".format(dp=dirpath, fi=filenames[i]), filter_dest)
-            print("EXTRACTED:\t{dr}".format(dr=filenames[i]))
-        elif cy_end in range(sort_file_cy_end, sort_file_cy):
-            shutil.move("{dp}\{fi}".format(dp=dirpath, fi=filenames[i]), filter_dest)
-            print("EXTRACTED:\t{dr}".format(dr=filenames[i]))
-    elif cx_end in range(sort_file_cx, sort_file_cx_end):
-        if cy in range(sort_file_cy_end, sort_file_cy):
-            shutil.move("{dp}\{fi}".format(dp=dirpath, fi=filenames[i]), filter_dest)
-            print("EXTRACTED:\t{dr}".format(dr=filenames[i]))
-        elif cy_end in range(sort_file_cy_end, sort_file_cy):
-            shutil.move("{dp}\{fi}".format(dp=dirpath, fi=filenames[i]), filter_dest)
-            print("EXTRACTED:\t{dr}".format(dr=filenames[i]))
+def extract(file_info, source_folder, dest_folder):
+    file_id, cx, cy, cw, ch = file_info
+    for root, dirs, filenames in os.walk(source_folder):
+        for filename in filenames:
+            if filename == "exclude_specific_file":
+                continue
+            if file_id in filename:
+                extract_cx = int(filename.split(",")[1].replace("x=", ""))
+                extract_cy = int(filename.split(",")[2].replace("y=", ""))
+                extract_cw = int(filename.split(",")[3].replace("w=", ""))
+                extract_ch = int(filename.split(",")[4].replace("h=", "").replace(suffix_extract, ""))
+                extract_cx_end = extract_cx + extract_cw
+                extract_cy_end = extract_cy - extract_ch
+                if (cx <= extract_cx <= cx + cw or cx <= extract_cx_end <= cx + cw) and \
+                        (cy >= extract_cy >= cy - ch or cy >= extract_cy_end >= cy - ch):
+                    source_path = os.path.join(root, filename)
+                    dest_path = os.path.join(dest_folder, filename)
+                    # shutil.move(source_path, dest_path)
+                    print("EXTRACTED:\t", filename)
+
+
+def main():
+    sorted_files = os.listdir(sorted_folder)
+
+    for sorted_filename in sorted_files:
+        if sorted_filename == "exclude_specific_file":
+            continue
+        file_info = sorted_filename.split()[0], \
+                    int(sorted_filename.split(",")[1].replace("x=", "")), \
+                    int(sorted_filename.split(",")[2].replace("y=", "")), \
+                    int(sorted_filename.split(",")[3].replace("w=", "")), \
+                    int(sorted_filename.split(",")[4].replace("h=", "").replace(suffix_sort, ""))
+        extract(file_info, extract_folder, filter_dest)
+
+    print("[INFO]: Extraction completed")
 
 
 if __name__ == "__main__":
-
-    # Listing all files from sorted folder
-    for (dirpath, dirnames, filenames) in os.walk(sorted_folder):
-        sorted_files.extend(filenames)
-
-    # Extracting files
-    for f in range(0, len(sorted_files)):
-        sort_file(f)
-        for (dirpath, dirnames, filenames) in os.walk(extract_folder):
-            if len(dirnames) == 0:
-                for i in range(0, len(filenames)):
-                    if filenames[i].split()[0] in sort_file_id:
-                        if filenames[i] != "exclude_specific_file":
-                            extract_cx = int(filenames[i].split(",")[1].replace("x=", ""))
-                            extract_cy = int(filenames[i].split(",")[2].replace("y=", ""))
-                            extract_cw = int(filenames[i].split(",")[3].replace("w=", ""))
-                            extract_ch = int(filenames[i].split(",")[4].replace("h=", "").replace(suffix, ""))
-                            extract_cx_end = extract_cx + extract_cw
-                            extract_cy_end = extract_cy - extract_ch
-                            extract(extract_cx, extract_cy, extract_cx_end, extract_cy_end)
-    print("[INFO]:\t\tExtraction completed")
-    sys.exit(0)
+    main()
