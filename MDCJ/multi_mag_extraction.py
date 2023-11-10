@@ -1,19 +1,22 @@
 import os
 import shutil
 import multiprocessing
+from functools import partial
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.1"
+__version__ = "1.2"
 __date__ = "07/11/2023"
 
 # Folder paths
+filtered_folder = r"D:\previously\filtered\folder"
 sorted_folder = r"D:\previously\sorted\folder"
 extract_folder = r"D:\folder\to\extract\from"
 filter_dest = r"D:\folder\to\move\files\to"
 
 # Variables
-suffix_sort = ".suffix"
+suffix_filtered = ".suffix"
+suffix_sorted = ".suffix"
 suffix_extract = ".suffix"
 num_workers = 12
 
@@ -35,34 +38,54 @@ def extract(file_info, source_folder, dest_folder):
                 if (extract_cx <= cx < extract_cx_end) and \
                         (extract_cx < cx + cw <= extract_cx_end):
                     if (extract_cy <= cy < extract_cy_end) and \
-                            (extract_cy < cy + ch <+ extract_cy_end):
+                            (extract_cy < cy + ch < + extract_cy_end):
                         source_path = os.path.join(root, filename)
                         dest_path = os.path.join(dest_folder, filename)
                         shutil.move(source_path, dest_path)
                         print("EXTRACTED:\t", filename)
-                        print("CX:\t\t",extract_cx, cx, extract_cx_end)
-                        print("CXE:\t",extract_cx, cx + cw, extract_cx_end)
-                        print("CY:\t\t",extract_cy, cy, extract_cy_end)
-                        print("CYE:\t",extract_cy, cy + ch, extract_cy_end)
+                        print("CX:\t\t", extract_cx, cx, extract_cx_end)
+                        print("CXE:\t", extract_cx, cx + cw, extract_cx_end)
+                        print("CY:\t\t", extract_cy, cy, extract_cy_end)
+                        print("CYE:\t", extract_cy, cy + ch, extract_cy_end)
 
 
-def process_file(filename):
+def process_filtered(filename):
+    if filename == "file.file":
+        return
     if filename == "file.file":
         return
     file_info = filename.split()[0], \
-                int(filename.split(",")[1].replace("x=", "")), \
-                int(filename.split(",")[2].replace("y=", "")), \
-                int(filename.split(",")[3].replace("w=", "")), \
-                int(filename.split(",")[4].replace("h=", "").replace(suffix_sort, ""))
+        int(filename.split(",")[1].replace("x=", "")), \
+        int(filename.split(",")[2].replace("y=", "")), \
+        int(filename.split(",")[3].replace("w=", "")), \
+        int(filename.split(",")[4].replace("h=", "").replace(suffix_filtered, ""))
+    extract(file_info, extract_folder, filter_dest)
+
+
+def process_sorted(filename):
+    if filename == "file.file":
+        return
+    if filename == "file.file":
+        return
+    file_info = filename.split()[0], \
+        int(filename.split(",")[1].replace("x=", "")), \
+        int(filename.split(",")[2].replace("y=", "")), \
+        0.5 * int(filename.split(",")[3].replace("w=", "")), \
+        0.5 * int(filename.split(",")[4].replace("h=", "").replace(suffix_sorted, ""))
     extract(file_info, extract_folder, filter_dest)
 
 
 def main():
+    filtered_files = os.listdir(filtered_folder)
     sorted_files = os.listdir(sorted_folder)
+
     pool = multiprocessing.Pool(processes=num_workers)
-    pool.map(process_file, sorted_files)
+
+    pool.map(process_filtered, filtered_files)
+    pool.map(process_sorted, sorted_files)
     pool.close()
     pool.join()
+
     print("[INFO]: Extraction completed")
 
 
