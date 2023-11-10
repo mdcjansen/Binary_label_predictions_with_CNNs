@@ -1,7 +1,6 @@
 import os
 import shutil
 import multiprocessing
-from functools import partial
 
 # Credentials
 __author__ = "M.D.C. Jansen"
@@ -43,10 +42,6 @@ def extract(file_info, source_folder, dest_folder):
                         dest_path = os.path.join(dest_folder, filename)
                         shutil.move(source_path, dest_path)
                         print("EXTRACTED:\t", filename)
-                        print("CX:\t\t", extract_cx, cx, extract_cx_end)
-                        print("CXE:\t", extract_cx, cx + cw, extract_cx_end)
-                        print("CY:\t\t", extract_cy, cy, extract_cy_end)
-                        print("CYE:\t", extract_cy, cy + ch, extract_cy_end)
 
 
 def process_filtered(filename):
@@ -79,6 +74,8 @@ def main():
     filtered_files = os.listdir(filtered_folder)
     sorted_files = os.listdir(sorted_folder)
 
+    print(filtered_files)
+    print(sorted_folder)
     pool = multiprocessing.Pool(processes=num_workers)
 
     pool.map(process_filtered, filtered_files)
