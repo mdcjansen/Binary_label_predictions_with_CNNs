@@ -4,18 +4,18 @@ import multiprocessing
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.0"
-__date__ = "31/10/2023"
+__version__ = "1.1"
+__date__ = "07/11/2023"
 
 # Folder paths
-sorted_folder = r"D:\path\to\sorted_folder"
-extract_folder = r"D:\path\to\extract_folder"
-filter_dest = r"D:\path\to\filter_destination"
+sorted_folder = r"D:\previously\sorted\folder"
+extract_folder = r"D:\folder\to\extract\from"
+filter_dest = r"D:\folder\to\move\files\to"
 
 # Variables
-suffix_sort = "].txt"
-suffix_extract = "].txt"
-num_workers = 4
+suffix_sort = ".suffix"
+suffix_extract = ".suffix"
+num_workers = 12
 
 
 # Function to extract file
@@ -23,7 +23,7 @@ def extract(file_info, source_folder, dest_folder):
     file_id, cx, cy, cw, ch = file_info
     for root, dirs, filenames in os.walk(source_folder):
         for filename in filenames:
-            if filename == "exclude_specific_file":
+            if filename == "file.file":
                 continue
             if file_id in filename:
                 extract_cx = int(filename.split(",")[1].replace("x=", ""))
@@ -31,17 +31,23 @@ def extract(file_info, source_folder, dest_folder):
                 extract_cw = int(filename.split(",")[3].replace("w=", ""))
                 extract_ch = int(filename.split(",")[4].replace("h=", "").replace(suffix_extract, ""))
                 extract_cx_end = extract_cx + extract_cw
-                extract_cy_end = extract_cy - extract_ch
-                if (cx <= extract_cx <= cx + cw or cx <= extract_cx_end <= cx + cw) and \
-                        (cy >= extract_cy >= cy - ch or cy >= extract_cy_end >= cy - ch):
-                    source_path = os.path.join(root, filename)
-                    dest_path = os.path.join(dest_folder, filename)
-                    shutil.move(source_path, dest_path)
-                    print("EXTRACTED:\t", filename)
+                extract_cy_end = extract_cy + extract_ch
+                if (extract_cx <= cx < extract_cx_end) and \
+                        (extract_cx < cx + cw <= extract_cx_end):
+                    if (extract_cy <= cy < extract_cy_end) and \
+                            (extract_cy < cy + ch <+ extract_cy_end):
+                        source_path = os.path.join(root, filename)
+                        dest_path = os.path.join(dest_folder, filename)
+                        shutil.move(source_path, dest_path)
+                        print("EXTRACTED:\t", filename)
+                        print("CX:\t\t",extract_cx, cx, extract_cx_end)
+                        print("CXE:\t",extract_cx, cx + cw, extract_cx_end)
+                        print("CY:\t\t",extract_cy, cy, extract_cy_end)
+                        print("CYE:\t",extract_cy, cy + ch, extract_cy_end)
 
 
 def process_file(filename):
-    if filename == "exclude_specific_file":
+    if filename == "file.file":
         return
     file_info = filename.split()[0], \
                 int(filename.split(",")[1].replace("x=", "")), \
