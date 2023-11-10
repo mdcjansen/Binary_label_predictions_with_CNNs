@@ -25,7 +25,7 @@ def extract(file_info, source_folder, dest_folder):
     file_id, cx, cy, cw, ch = file_info
     for root, dirs, filenames in os.walk(source_folder):
         for filename in filenames:
-            if filename == "Thumbs.db":
+            if filename == "file.file":
                 continue
             if file_id in filename:
                 extract_cx = int(filename.split(",")[1].replace("x=", ""))
@@ -45,11 +45,11 @@ def extract(file_info, source_folder, dest_folder):
 
 
 def process_filtered(filename):
-    if filename == "Thumbs.db":
+    if filename == "file.file":
         return
-    elif filename == "masks":
+    elif filename == "file.file":
         return
-    elif filename.endswith(".png"):
+    elif filename.endswith("file.file"):
         return
     file_info = filename.split()[0], \
         int(filename.split(",")[1].replace("x=", "")), \
@@ -60,9 +60,9 @@ def process_filtered(filename):
 
 
 def process_sorted(filename):
-    if filename == "Thumbs.db":
+    if filename == "file.file":
         return
-    elif filename == "masks":
+    elif filename == "file.file":
         return
     file_info = filename.split()[0], \
         int(filename.split(",")[1].replace("x=", "")), \
