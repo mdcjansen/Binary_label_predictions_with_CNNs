@@ -4,8 +4,8 @@ import multiprocessing
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.3"
-__date__ = "09/11/2023"
+__version__ = "1.4"
+__date__ = "10/11/2023"
 
 # Folder paths
 filtered_folder = r"D:\previously\filtered\folder"
@@ -49,7 +49,7 @@ def process_filtered(filename):
         return
     elif filename == "file.file":
         return
-    elif filename.endswith("file.file"):
+    elif filename.endswith(".suffix"):
         return
     file_info = filename.split()[0], \
         int(filename.split(",")[1].replace("x=", "")), \
@@ -81,10 +81,13 @@ def main():
     pool = multiprocessing.Pool(processes=num_workers)
 
     pool.map(process_filtered, filtered_files)
+    print("[INFO]: Completed extraction from filtered files")
+
     pool.map(process_sorted, sorted_files)
+    print("[INFO]: Completed extraction from sorted files")
+
     pool.close()
     pool.join()
-
     print("[INFO]: Extraction completed")
 
 
