@@ -30,7 +30,7 @@ from torchvision.models import inception_v3
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.2"
+__version__ = "1.3"
 __date__ = "14/11/2023"
 
 # Paths
@@ -41,8 +41,8 @@ xlsx_path = r"D:\\CLARIFY\\BRS\\Image patches\\BRS_labels_binary 0(1)and1(2) vs 
 train_dirname = "Training"
 val_dirname = "Validation"
 # code_path = ""
-wandb_name = "231113_Debugging_DenseNet_MDCJ"
-wandb_save = "\\smb01.isi01-rx.erasmusmc.nl\store_isilon\EUCRG\Shared folders\Students\2023\Maarten\Codes\CNNs\DenseNet121\231113_Debugging_DenseNet_MDCJ.py"
+wandb_name = "231113_Debugging_Inceptionv3_MDCJ"
+wandb_save = r"\\smb01.isi01-rx.erasmusmc.nl\store_isilon\EUCRG\Shared folders\Students\2023\Maarten\Codes\CNNs\DenseNet121\231113_Debugging_DenseNet_MDCJ.py"
 
 # Misc variables
 log_level = logging.DEBUG
@@ -53,7 +53,7 @@ num_epochs = 50
 class CustomImageDataset(Dataset):
     def __init__(self, root_dir, xlsx_path, transform=None):
         print("Initializing CustomImageDataset...")  # Debug statement
-        # logging.debug("Initializing CustomImageDataset")
+        # logging.info("Initializing CustomImageDataset")
         self.root_dir = root_dir
         self.transform = transform
         self.df_labels = pd.read_excel(xlsx_path)
@@ -207,7 +207,7 @@ def log_metrics(metrics, split, prefix, loss):
     )
 
     def create_model(batch_norm, dropout_rate):
-        # logging.inf("Creating model")
+        # logging.info("Creating model")
         model = inception_v3(pretrained=True, aux_logits=True)
 
         for param in model.parameters():
