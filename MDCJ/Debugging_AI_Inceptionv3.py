@@ -20,7 +20,7 @@ from PIL import Image
 from scipy import stats
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, precision_score, recall_score, \
     roc_curve, auc, confusion_matrix
-from time import datetime
+# from time import datetime
 from torch.cuda.amp import autocast, GradScaler
 from torch.nn.functional import sigmoid
 from torch.optim import lr_scheduler
@@ -32,8 +32,8 @@ from torchvision.models import inception_v3
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.6"
-__date__ = "20/11/2023"
+__version__ = "1.7"
+__date__ = "21/11/2023"
 
 # Parameter file path
 param_path = r"D:\path\to\parameter\file.csv
@@ -115,11 +115,11 @@ class CustomHead(nn.Module):
         return x
 
 
-def generate_filename(prefix, config, criterion, epoch):
+def generate_filename(prefix, run_name, config, criterion, epoch):
     """Generate a filename based on the model configuration."""
     params = [f"{key}={value}" for key, value in config.items() if key not in ['project']]
     return os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                        os.path.join("Best models", f"{prefix}_epoch_{epoch + 1}.pt"))
+                        os.path.join("Best models", f"{prefix}_{run_name}_epoch_{epoch + 1}_{criterion}.pt"))
 
 
 def load_parameters(param_path):
@@ -135,24 +135,25 @@ def load_parameters(param_path):
         'xlsx_dir': ''.join(input_param['xlsx_path']),
         'train_dir': ''.join(input_param['train_dirname']),
         'val_dir': ''.join(input_param['val_dirname']),
+        'test_dir': ''.join(input_param['test_dirname']),
         'wdb_name': ''.join(input_param['wandb_name']),
         'wdb_save': ''.join(input_param['wandb_save']),
         'log_lvl': ''.join(input_param['log_level']),
-        'dl_work': ''.join(input_param['dataload_workers']),
-        'a_steps': ''.join(input_param['accumulation_steps']),
-        'num_e': ''.join(input_param['num_epochs']),
-        'num_t': ''.join(input_param['num_trials']),
-        'es_count': ''.join(input_param['es_counter']),
-        'es_limit': ''.join(input_param['es_limit']),
-        'tl_lr': ''.join(input_param['tl_loss_rate']).split(';'),
+        'dl_work': int(''.join(input_param['dataload_workers'])),
+        'a_steps': int(''.join(input_param['accumulation_steps'])),
+        'num_e': int(''.join(input_param['num_epochs'])),
+        'num_t': int(''.join(input_param['num_trials'])),
+        'es_count': int(''.join(input_param['es_counter'])),
+        'es_limit': int(''.join(input_param['es_limit'])),
+        'tl_lr': list(map(float, ''.join(input_param['tl_loss_rate']).split(';'))),
         'tl_bn': ''.join(input_param['tl_batch_norm']).split(';'),
-        'tl_dr': ''.join(input_param['tl_dropout_rate']).split(';'),
-        'tl_bs': ''.join(input_param['tl_batch_size']),
-        'tl_wd_min': ''.join(input_param['tl_weight_decay_min']),
-        'tl_wd_max': ''.join(input_param['tl_weight_decay_max']),
-        'tl_ga_min': ''.join(input_param['tl_gamma_min']),
-        'tl_ga_max': ''.join(input_param['tl_gamma_max']),
-        'tl_ga_tp': ''.join(input_param['tl_gamma_step'])
+        'tl_dr': list(map(float, ''.join(input_param['tl_dropout_rate']).split(';'))),
+        'tl_bs': list(map(int, ''.join(input_param['tl_batch_size']).split())),
+        'tl_wd_min': float(''.join(input_param['tl_weight_decay_min'])),
+        'tl_wd_max': float(''.join(input_param['tl_weight_decay_max'])),
+        'tl_ga_min': float(''.join(input_param['tl_gamma_min'])),
+        'tl_ga_max': float(''.join(input_param['tl_gamma_max'])),
+        'tl_ga_tp': float(''.join(input_param['tl_gamma_step']))
     }
 
     return input_variables
@@ -358,6 +359,43 @@ def validate(model, val_data_loader, device):
         return total_loss / len(val_data_loader.dataset), metrics
 
 
+def test(model, test_data_loader, device):
+    # print("Starting test set prediction...")  # Debug statement
+    # logging.info("Starting validation")
+    model.eval()
+    total_loss = 0
+    all_predictions = []
+    all_labels = []
+    y_proba = []
+
+    with torch.no_grad():
+        for i, (images, labels, study_ids) in enumerate(test_data_loader):
+            # print(f"test predicting batch {i+1}/{len(test_data_loader)}...")  # Debug statement
+            # logging.info(f"test predicting {i+1}/{len(test_data_loader)}")
+            images, labels = images.to(device), labels.to(device)
+            with autocast():
+                outputs = model(images)  # Use outputs directly
+                loss = F.binary_cross_entropy_with_logits(outputs.squeeze(), labels.float())
+
+            total_loss += loss.item() * images.size(0)
+
+            all_predictions.extend((torch.sigmoid(outputs.squeeze()) > 0.5).long().tolist())
+            all_labels.extend(labels.tolist())
+            y_proba.extend(torch.sigmoid(outputs.squeeze().detach().cpu().float()).numpy())
+
+            del images, labels
+            torch.cuda.empty_cache()
+
+        metrics = calculate_metrics(all_labels, all_predictions, y_proba)
+        print("test set prediction complete.")  # Debug statement
+        # logging.info("test set prediction complete")
+
+        # Clearing memory
+        del all_predictions, all_labels, y_proba
+
+        return total_loss / len(test_data_loader.dataset), metrics
+
+
 def predict(model, data_loader, device):
     print("Starting prediction...")  # Debug statement
     # logging.info("Starting prediction")
@@ -422,20 +460,19 @@ def objective(trial):
     wandb.save(parameters['wdb_save'])
 
     config = run.config
-    trial_lr = trial.suggest_categorical('lr', parameters(['tl_lr']))
-    trial_batch_norm = trial.suggest_categorical('batch_norm', parameters(['tl_bn']))
-    trial_dropout_rate = trial.suggest_categorical('dropout_rate', parameters(['tl_dr']))
+    trial_lr = trial.suggest_categorical('lr', parameters['tl_lr'])
+    trial_batch_norm = trial.suggest_categorical('batch_norm', parameters['tl_bn'])
+    trial_dropout_rate = trial.suggest_categorical('dropout_rate', parameters['tl_dr'])
 
     # Configuration setup
     run.config.update({
         "lr": trial_lr,
-        "batch_size": trial.suggest_categorical('batch_size', parameters(['tl_bs'])),
-        "num_epochs": parameters(['num_e']),
-        "weight_decay": trial.suggest_float('weight_decay', parameters(['tl_wd_min']), parameters(['tl_wd_max']),
-                                            log=True),
+        "batch_size": trial.suggest_categorical('batch_size', parameters['tl_bs']),
+        "num_epochs": parameters['num_e'],
+        "weight_decay": trial.suggest_float('weight_decay', parameters['tl_wd_min'], parameters['tl_wd_max'], log=True),
         "step_size": 5,
-        "gamma": trial.suggest_float('gamma', parameters(['tl_ga_min']), parameters(['tl_ga_max']),
-                                     step=parameters(['tl_ga_tp'])),
+        "gamma": trial.suggest_float('gamma', parameters['tl_ga_min'], parameters['tl_ga_max'],
+                                     step=parameters['tl_ga_tp']),
         "batch_norm": trial_batch_norm,
         "dropout_rate": trial_dropout_rate
     }, allow_val_change=True)
@@ -443,7 +480,7 @@ def objective(trial):
     # logging.info("Config setup:\n"
     #             f"lr: {trail_lr}\n"
     #             f"batch_size: {trail.suggest_categorial('batch_size', [256])}\n"
-    #             f"num_epochs: {parameters(['num_e'])}\n"
+    #             f"num_epochs: {parameters['num_e']}\n"
     #             f"weight_decay: {trail.suggest_float('weight_decay', 1e-5, 1e-1, log=True)}\n"
     #             f"step_size: 5\n"
     #             f"gamma: {trail.suggest_float('gamma', 0.1, 0.9, step=0.1)}\n"
@@ -459,6 +496,8 @@ def objective(trial):
                                    num_workers=parameters['dl_work'], pin_memory=True)
     val_data_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False,
                                  num_workers=parameters['dl_work'], pin_memory=True)
+    test_data_loader = DataLoader(test_dataset, batch_size=config.batch_size, shuffle=False,
+                                  num_workers=parameters['dl_work'], pin_memory=True)
 
     # Initialize the model
     model, model_name = create_model(config["batch_norm"], config["dropout_rate"])
@@ -475,8 +514,8 @@ def objective(trial):
     # Initialize best validation loss and balanced accuracy for early stopping
     best_val_loss = float('inf')
     best_bal_acc = float('-inf')
-    early_stop_counter = parameters(['es_count'])
-    early_stop_limit = parameters(['es_limit'])
+    early_stop_counter = parameters['es_count']
+    early_stop_limit = parameters['es_limit']
 
     # Training and validation loop
     # logging.info("Start training")
@@ -511,13 +550,25 @@ def objective(trial):
         bal_acc = validation_metrics['bal_acc']
         is_best_loss = validation_loss < best_val_loss
 
+        if (epoch + 1) % 10 == 0:
+            print(f"Epoch {epoch + 1} - Start predictions on test set")
+            with profiler.profile(record_shapes=True) as profvald:
+                # CREATE FUNCTION
+                test_loss, test_metrics = test(model, test_data_loader, device)
+            print("[INFO VALD]:\n\n", profvald.key_averages().table(sort_by="self_cpu_time_total", row_limit=15))
+            print(f"Epoch {epoch + 1} - Test Loss: {validation_loss:.4f}")
+
+            log_metrics(test_metrics, 'test', 'img', test_loss)
+            print(
+                f"Epoch {epoch + 1} - Test Metrics: Acc: {test_metrics['acc']:.4f}, F1: {test_metrics['f1']:.4f}, Bal Acc: {bal_acc:.4f}")
+
         if is_best_loss:
             best_val_loss = validation_loss
             early_stop_counter = 0
-            torch.save(model.state_dict(), generate_filename('best_model', config, 'loss', epoch))
-            with open('model_parameters.csv', 'w+') as model_csv:
+            torch.save(model.state_dict(), generate_filename('best_model', run.name, config, 'loss', epoch))
+            with open('model_parameters.csv', 'a+') as model_csv:
                 ml_params = [f"{key}={value}" for key, value in config.items() if key not in ['project']]
-                model_csv.write(f"MODELNAME,loss,{epoch + 1},{','.join(ml_params)}")
+                model_csv.write(f"{run.name},loss,epoch={epoch + 1},{','.join(ml_params)}\n")
             model_csv.close()
 
         else:
@@ -532,10 +583,10 @@ def objective(trial):
         is_best_bal_acc = bal_acc > best_bal_acc
         if is_best_bal_acc:
             best_bal_acc = bal_acc
-            torch.save(model.state_dict(), generate_filename('best_model', config, 'bal_acc', epoch))
-            with open('model_parameters.csv', 'w+') as model_csv:
+            torch.save(model.state_dict(), generate_filename('best_model', run.name, config, 'bal_acc', epoch))
+            with open('model_parameters.csv', 'a+') as model_csv:
                 ml_params = [f"{key}={value}" for key, value in config.items() if key not in ['project']]
-                model_csv.write(f"MODELNAME,bal_acc,{epoch + 1},{','.join(ml_params)}")
+                model_csv.write(f"{run.name},bal_acc,epoch={epoch + 1},{','.join(ml_params)}\n")
             model_csv.close()
 
         # Log validation metrics
@@ -578,7 +629,7 @@ def main():
 
     # Create the Optuna study and start the optimization process
     study = optuna.create_study(direction='minimize')
-    study.optimize(objective, n_trials=parameters(['num_t']))
+    study.optimize(objective, n_trials=parameters['num_t'])
 
 
 if __name__ == '__main__':
@@ -597,15 +648,19 @@ if __name__ == '__main__':
     # logging.info("Starting predictions for:\t{wn}".format(wn=parameters['wdb_name']))
 
     parameters = load_parameters(param_path)
-    root_dir = parameters(['root_dir'])
-    xlsx_dir = parameters(['xlsx_dir'])
+    root_dir = parameters['root_dir']
+    xlsx_dir = parameters['xlsx_dir']
     transform = transforms.Compose([transforms.ToTensor()])
+
     train_dataset = CustomImageDataset(os.path.join(parameters['root_dir'], parameters['train_dir']),
                                        parameters['xlsx_dir'], transform=transform)
     val_dataset = CustomImageDataset(os.path.join(parameters['root_dir'], parameters['val_dir']),
                                      parameters['xlsx_dir'], transform=transform)
+    test_dataset = CustomImageDataset(os.path.join(parameters['root_dir'], parameters['test_dir']),
+                                      parameters['xlsx_dir'], transform=transform)
     train_class_counts = get_class_counts(train_dataset)
     val_class_counts = get_class_counts(val_dataset)
+    test_class_count = get_class_counts(test_dataset)
 
     print("Training set class counts:")
     for label, count in train_class_counts.items():
