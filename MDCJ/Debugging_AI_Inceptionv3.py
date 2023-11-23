@@ -30,31 +30,46 @@ from torchvision.models import inception_v3
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.4"
-__date__ = "15/11/2023"
+__version__ = "1.5"
+__date__ = "16/11/2023"
 
 # Paths
 root_dir = r"D:\path\to\root\folder"
 xlsx_path = r"D:\path\to\binary\xlsx"
+param_file = r"D:\path\to\param\file.csv"
 
 # String variables
 train_dirname = "Training"
 val_dirname = "Validation"
-# code_path = ""
-wandb_name = "project_name"
-wandb_save = r"D:\model\save\folder"
+wandb_name = "231113_Debugging_w_Inceptionv3_MDCJ"
+wandb_save = r"D:\CLARIFY\BRS\Image patches\Debugging datasets\231115-20X-Training-dataset"
 
 # Misc variables
 log_level = logging.DEBUG
 dataload_workers = 3
 accumulation_steps = 4
+
+# Number of cycles
 num_epochs = 10
+num_trials = 200
+es_counter = 0
+es_limit = 15
+
+# Trail hyper parameters
+tl_loss_rate = [1e-4, 1e-3, 1e-2]
+tl_batch_norm = [True, False]
+tl_dropout_rate = [0, 0.1, 0.2, 0.5]
+tl_batch_size = [256]
+tl_weight_decay_min = 1e-5
+tl_weight_decay_max = 1e-1
+tl_gamma_min = 0.1
+tl_gamma_max = 0.9
+tl_gamma_step = 0.1
 
 
 class CustomImageDataset(Dataset):
     def __init__(self, root_dir, xlsx_path, transform=None):
         # print("Initializing CustomImageDataset...")  # Debug statement
-        # logging.info("Initializing CustomImageDataset")
         self.root_dir = root_dir
         self.transform = transform
         self.df_labels = pd.read_excel(xlsx_path)
@@ -77,7 +92,7 @@ class CustomImageDataset(Dataset):
         # Extract study_id from image name
         segments = img_name.split('_')
 
-        if len(segments) <= 2:
+        if len(segments) <= 1:
             raise ValueError(f"Unexpected image name format for {img_name}")
 
         study_id = segments[1]
@@ -385,9 +400,6 @@ def predict(model, data_loader, device):
 def generate_filename(prefix, config, criterion, epoch):
     """Generate a filename based on the model configuration."""
     params = [f"{key}={value}" for key, value in config.items() if key not in ['project']]
-    # print(os.path.join("Best models", f"{prefix}_epoch_{epoch + 1}_{'_'.join(params)}_{criterion}.pt"))
-    # print(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.path.join("Best models", f"{prefix}_epoch_{epoch + 1}_{'_'.join(params)}_{criterion}.pt\n")))
-    # return u"\\\\?\\" + os.path.join(os.path.dirname(os.path.realpath(__file__)), os.path.join("Best models", f"{prefix}_epoch_{epoch + 1}_{'_'.join(params)}_{criterion}.pt\n"))
     return os.path.join(os.path.dirname(os.path.realpath(__file__)),
                         os.path.join("Best models", f"{prefix}_epoch_{epoch + 1}.pt"))
 
@@ -402,18 +414,18 @@ def objective(trial):
     wandb.save(wandb_save)
 
     config = run.config
-    trial_lr = trial.suggest_categorical('lr', [1e-4, 1e-3, 1e-2])
-    trial_batch_norm = trial.suggest_categorical('batch_norm', [True, False])
-    trial_dropout_rate = trial.suggest_categorical('dropout_rate', [0, 0.1, 0.2, 0.5])
+    trial_lr = trial.suggest_categorical('lr', tl_loss_rate)
+    trial_batch_norm = trial.suggest_categorical('batch_norm', tl_batch_norm)
+    trial_dropout_rate = trial.suggest_categorical('dropout_rate', tl_dropout_rate)
 
     # Configuration setup
     run.config.update({
         "lr": trial_lr,
-        "batch_size": trial.suggest_categorical('batch_size', [256]),
+        "batch_size": trial.suggest_categorical('batch_size', tl_batch_size),
         "num_epochs": num_epochs,
-        "weight_decay": trial.suggest_float('weight_decay', 1e-5, 1e-1, log=True),
+        "weight_decay": trial.suggest_float('weight_decay', tl_weight_decay_min, tl_weight_decay_max, log=True),
         "step_size": 5,
-        "gamma": trial.suggest_float('gamma', 0.1, 0.9, step=0.1),
+        "gamma": trial.suggest_float('gamma', tl_gamma_min, tl_gamma_max, step=tl_gamma_step),
         "batch_norm": trial_batch_norm,
         "dropout_rate": trial_dropout_rate
     }, allow_val_change=True)
@@ -453,8 +465,8 @@ def objective(trial):
     # Initialize best validation loss and balanced accuracy for early stopping
     best_val_loss = float('inf')
     best_bal_acc = float('-inf')
-    early_stop_counter = 0
-    early_stop_limit = 15
+    early_stop_counter = es_counter
+    early_stop_limit = es_limit
 
     # Training and validation loop
     # logging.info("Start training")
@@ -465,7 +477,7 @@ def objective(trial):
             training_loss, training_metrics, train_patient_metrics = train(model, train_data_loader, optimizer,
                                                                            scheduler, device, scaler)
         # log = proftrain.key_averages().table(sort_by="self_cpu_time_total", row_limit=10)
-        print("[INFO TRAIN]:\n\n", proftrain.key_averages().table(sort_by="self_cpu_time_total", row_limit=10))
+        print("[INFO TRAIN]:\n\n", proftrain.key_averages().table(sort_by="self_cpu_time_total", row_limit=15))
         print(f"Epoch {epoch + 1} - Training Loss: {training_loss:.4f}")  # Debug statement
         # logging.info(f"[INFO TRAIN]:\n{log}")
         # logging.debug(f"Epoch {epoch + 1} - Training Loss: {training_loss:.4f}")
@@ -479,7 +491,7 @@ def objective(trial):
         with profiler.profile(record_shapes=True) as profvald:
             validation_loss, validation_metrics = validate(model, val_data_loader, device)
         # log = profvald.key_averages().table(sort_by="self_cpu_time_total", row_limit=10)
-        print("[INFO VALD]:\n\n", profvald.key_averages().table(sort_by="self_cpu_time_total", row_limit=10))
+        print("[INFO VALD]:\n\n", profvald.key_averages().table(sort_by="self_cpu_time_total", row_limit=15))
         print(f"Epoch {epoch + 1} - Validation Loss: {validation_loss:.4f}")  # Debug statement
         # logging.info(f"[INFO VALD]:\n{log}")
         # logging.debug(f"Epoch {epoch + 1} - Validation Loss: {validation_loss:.4f}")
@@ -489,27 +501,11 @@ def objective(trial):
         bal_acc = validation_metrics['bal_acc']
         is_best_loss = validation_loss < best_val_loss
 
-        # print("BEST LOSS: ", is_best_loss)
-        # print(generate_filename('best_model', config, 'loss', epoch))
-        # print(model.state_dict())
-        # print("BES BALL ACC: ", is_best_bal_acc ,"\n")
-
         if is_best_loss:
-            # print("IN IF BEST LOSS")
             best_val_loss = validation_loss
-            # print("PAST BEST_VAL_LOSS")
             early_stop_counter = 0
-            # print("PAST_EARLY_STOP")
-            # print(generate_filename('best_model', config, 'bal_acc', epoch))
-            # torch.save(model.state_dict(), r"D:\CLARIFY\BRS\Image patches\Debugging datasets\231115-20X-Training-dataset\Best models\test.test.pt") # WORKS
-            # torch.save(model.state_dict(), r"D:\CLARIFY\BRS\Image patches\Debugging datasets\231115-20X-Training-dataset\Best models\best_model_epoch_1_lr=0.0001.pt") # WORKS
-            # torch.save(model.state_dict(), r"D:\CLARIFY\BRS\Image patches\Debugging datasets\231115-20X-Training-dataset\Best models\testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest.pt")
-            # torch.save(model.state_dict(), r"D:\CLARIFY\BRS\Image patches\Debugging datasets\231115-20X-Training-dataset\Best models\best_model_epoch_1_lr=0.0001_batch_size=256_num_epochs=50_weight_decay=0.0009172109154009133_step_size=5_gamma=0.6_batch_norm=True_dropout_rate=0.5_model_name=InceptionV3_loss.pt")
-            # savename = generate_filename('best_model', config, 'loss', epoch)
-            # torch.save(model.state_dict(), savename)
-            # print(type(generate_filename('best_model', config, 'loss', epoch)))
+
             torch.save(model.state_dict(), generate_filename('best_model', config, 'loss', epoch))
-            # print("PAST TORCH SAVE")
 
         else:
             # print("IN ELSE STATEMENT :(")
@@ -517,18 +513,13 @@ def objective(trial):
             if early_stop_counter >= early_stop_limit:
                 # logging.error("Early stopping triggered")
                 print('Early stopping triggered')  # Debug statement
-                print("[INFO MAIN]:\n\n", profmain.key_averages().table(sort_by="self_cpu_time_total", row_limit=10))
                 print("\n\n\n")
                 break
-
-        # print("PAST BEST LOSS STATEMENT")
 
         is_best_bal_acc = bal_acc > best_bal_acc
         if is_best_bal_acc:
             best_bal_acc = bal_acc
             torch.save(model.state_dict(), generate_filename('best_model', config, 'bal_acc', epoch))
-
-        # print("PAST BALL ACC STATEMENT")
 
         # Log validation metrics
         log_metrics(validation_metrics, 'val', 'img', validation_loss)
@@ -566,11 +557,11 @@ def main():
     mp.set_start_method('spawn', force=True)
 
     # Initialize Weights & Biases (if you're using it)
-    wandb.init(project="your_project_name_here")
+    wandb.init(project=wandb_name)
 
     # Create the Optuna study and start the optimization process
     study = optuna.create_study(direction='minimize')
-    study.optimize(objective, n_trials=200)
+    study.optimize(objective, n_trials=num_trials)
 
 
 if __name__ == '__main__':
@@ -615,9 +606,7 @@ if __name__ == '__main__':
 
     # logging.info("Starting main")
     print("Starting main...")
-    with profiler.profile(record_shapes=True) as profmain:
-        main()
+    main()
     # log = profmain.key_averages().table(sort_by="self_cpu_time_total", row_limit=10)
-    print("[INFO MAIN]:\n\n", profmain.key_averages().table(sort_by="self_cpu_time_total", row_limit=10))
     # logging.info(f"Profiler info main:\n{log}")
     print("Main complete.")
