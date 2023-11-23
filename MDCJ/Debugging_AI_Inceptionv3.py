@@ -30,10 +30,11 @@ from torchvision.models import inception_v3
 
 # from torchvision.datasets import DatasetFolder
 
+### Set with test function
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.7"
-__date__ = "21/11/2023"
+__version__ = "1.8"
+__date__ = "22/11/2023"
 
 # Parameter file path
 param_path = r"D:\path\to\parameter\file.csv
@@ -553,7 +554,6 @@ def objective(trial):
         if (epoch + 1) % 10 == 0:
             print(f"Epoch {epoch + 1} - Start predictions on test set")
             with profiler.profile(record_shapes=True) as profvald:
-                # CREATE FUNCTION
                 test_loss, test_metrics = test(model, test_data_loader, device)
             print("[INFO VALD]:\n\n", profvald.key_averages().table(sort_by="self_cpu_time_total", row_limit=15))
             print(f"Epoch {epoch + 1} - Test Loss: {validation_loss:.4f}")
@@ -572,7 +572,6 @@ def objective(trial):
             model_csv.close()
 
         else:
-            # print("IN ELSE STATEMENT :(")
             early_stop_counter += 1
             if early_stop_counter >= early_stop_limit:
                 # logging.error("Early stopping triggered")
