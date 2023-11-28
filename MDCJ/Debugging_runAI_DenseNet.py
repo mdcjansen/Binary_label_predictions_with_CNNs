@@ -232,21 +232,41 @@ def log_metrics(metrics, split, prefix, loss):
 
 
 ## DEFINE MODEL PATH
-def load_model(model_path):
+def load_model(model_path, batch_norm, dropout_rate):
     model = densenet121(pretrained=False)
 
     for param in model.parameters():
         param.requires_grad = False
 
     state_dict = torch.load(model_path, map_location=device)
-    model.load_state_dict(state_dict)
+
+    # Modify the main classifier
+    num_ftrs = model.fc.in_features
+    model.fc = CustomHead(num_ftrs, 1, batch_norm, dropout_rate)
+
+    # Modify the auxiliary classifier
+    aux_ftrs = model.AuxLogits.fc.in_features
+    model.AuxLogits.fc = nn.Linear(aux_ftrs, 1)
+
+    # new_state_dict = {}
+    #    if key.startswith("classifier.fc.weight"):
+    #        new_key = key.replace("classifier.fc.weight", "classifier.weight")
+    #        new_state_dict[new_key] = value
+    #    elif key.startswith("classifier.fc.bias"):
+    #        new_key = key.replace("classifier.fc.bias", "classifier.bias")
+    #        new_state_dict[new_key] = value
+    #    else:
+    #        new_state_dict[key] = value
+
+    # for key, value in state_dict.items():
+    #    print(key)
+
+    # model.load_state_dict(new_state_dict)
 
     model.eval()
     model = model.to(device)
 
     return model, "DenseNet121"
-
-    ## Change to load model and load resonance
 
 
 def predict(model, data_loader, device):
@@ -348,7 +368,7 @@ def objective(trial):
                                   num_workers=parameters['dl_work'], pin_memory=True)
 
     ## LOAD EXISTING MODEL
-    model, model_name = load_model('MODEL_PATH')
+    model, model_name = load_model(model_path, config["batch_norm"], config["dropout_rate"])
 
     # Move model to the device (CPU/GPU)
     model.to(device)
