@@ -33,7 +33,7 @@ from torchvision.models import inception_v3
 ### Set with test function
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.10"
+__version__ = "1.11"
 __date__ = "24/11/2023"
 
 # Parameter file path
@@ -178,6 +178,18 @@ def custom_transform(image):
     return transforms.functional.to_tensor(image)
 
 
+def load_img_label(dataset):
+    images = []
+    labels = []
+    ids = []
+    for idx, (img, label, study_id) in enumerate(dataset):
+        if len(images) != 100:
+            images.append(img)
+            labels.append(label)
+            ids.append(study_id)
+    return images, labels, ids
+
+
 def get_class_counts(dataset):
     print("Counting classes for dataset...")  # Debug statement
     # logging.info("Counting classes for dataset")
@@ -296,11 +308,12 @@ def train(model, train_data_loader, optimizer, scheduler, device, scaler):
     y_logits = []
 
     optimizer.zero_grad()
-
-    for i, (images, labels, study_ids) in enumerate(train_data_loader):
+    for i in range(len(train_images)):
         # print(f"Training batch {i+1}/{len(train_data_loader)}...")  # Debug statement
         # logging.info(f"Training batch {i+1}/{len(train_data_loader)}")
-        images, labels = images.to(device), labels.to(device)
+        # images, labels = train_images[i].to(device), train_labels[i].to(device)
+        images = torch.tensor(train_images[i], dtype=torch.float32).to(device)
+        labels = torch.tensor(train_images[i], dtype=torch.long).to(device)
         with autocast():
             outputs, aux_outputs = model(images)
 
@@ -324,7 +337,7 @@ def train(model, train_data_loader, optimizer, scheduler, device, scaler):
         all_labels.extend(labels.tolist())
         y_logits.extend(outputs.squeeze().detach().cpu().numpy())
         total_loss += loss.item() * images.size(0)
-        torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
 
     scheduler.step()
     metrics = calculate_metrics(all_labels, all_predictions, y_logits)
@@ -337,7 +350,7 @@ def train(model, train_data_loader, optimizer, scheduler, device, scaler):
     train_patient_metrics = calculate_metrics(train_patient_labels, train_patient_predictions, train_patient_probs)
     print("Training complete.")  # Debug statement
     # logging.info("Training complete")
-    del all_predictions, all_labels, y_logits  # Clearing memory
+    # del all_predictions, all_labels, y_logits  # Clearing memory
     return total_loss / len(train_data_loader.dataset), metrics, train_patient_metrics
 
 
@@ -351,10 +364,12 @@ def validate(model, val_data_loader, device):
     y_proba = []
 
     with torch.no_grad():
-        for i, (images, labels, study_ids) in enumerate(val_data_loader):
+        for i in range(len(val_images)):
             # print(f"Validating batch {i+1}/{len(val_data_loader)}...")  # Debug statement
             # logging.info(f"Validating batch {i+1}/{len(val_data_loader)}")
-            images, labels = images.to(device), labels.to(device)
+            # images, labels = val_images[i].to(device), val_labels[i].to(device)
+            images = torch.tensor(train_images[i], dtype=torch.float32).to(device)
+            labels = torch.tensor(train_images[i], dtype=torch.long).to(device)
             with autocast():
                 outputs = model(images)  # Use outputs directly
                 loss = F.binary_cross_entropy_with_logits(outputs.squeeze(), labels.float())
@@ -365,15 +380,15 @@ def validate(model, val_data_loader, device):
             all_labels.extend(labels.tolist())
             y_proba.extend(torch.sigmoid(outputs.squeeze().detach().cpu().float()).numpy())
 
-            del images, labels
-            torch.cuda.empty_cache()
+            # del images, labels
+            # torch.cuda.empty_cache()
 
         metrics = calculate_metrics(all_labels, all_predictions, y_proba)
         print("Validation complete.")  # Debug statement
         # logging.info("Validation complete")
 
         # Clearing memory
-        del all_predictions, all_labels, y_proba
+        # del all_predictions, all_labels, y_proba
 
         return total_loss / len(val_data_loader.dataset), metrics
 
@@ -389,10 +404,10 @@ def predict(model, data_loader, device):
     y_proba = []
 
     with torch.no_grad():
-        for i, (inputs, labels, study_ids) in enumerate(data_loader):
+        for i in range(len(val_images)):
             # print(f"Predicting batch {i+1}/{len(data_loader)}...")  # Debug statement
             # logging.info(f"Predicting batch {i+1}/{len(data_loader)}")
-            inputs = inputs.to(device)
+            inputs, labels = val_images[i].to(device), val_labels[i].to(device)
             outputs = model(inputs)
 
             output = outputs.view(-1)
@@ -411,8 +426,8 @@ def predict(model, data_loader, device):
                 study_summary[study_id]['labels'].append(label)
 
             # Clear memory if needed
-            del inputs, outputs, labels, study_ids
-            torch.cuda.empty_cache()
+            # del inputs, outputs, labels, study_ids
+            # torch.cuda.empty_cache()
 
         # Calculate patient-level predictions
         patient_predictions = []
@@ -627,10 +642,24 @@ if __name__ == '__main__':
                                      parameters['xlsx_dir'], transform=transform)
     train_class_counts = get_class_counts(train_dataset)
     val_class_counts = get_class_counts(val_dataset)
+
+    train_images = []
+    train_labels = []
+    val_images = []
+    val_labels = []
+
+    print("Loading training images")
+    train_images, train_labels, _ = load_img_label(train_dataset)
+    print("loaded training images")
+    print(train_dataset)
+
+    print("Loading validation images")
+    val_images, val_labels, study_ids = load_img_label(val_dataset)
+    print("Loaded validation images")
+
     print("Training set class counts:")
     for label, count in train_class_counts.items():
         print(f"Class {label}: {count} images")
-    #    logging.info(f"Training set class counts {label}: {count} images")
 
     print("\nValidation set class counts:")
     for label, count in val_class_counts.items():
