@@ -33,8 +33,8 @@ from torchvision.models import inception_v3
 ### Set with test function
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.11"
-__date__ = "24/11/2023"
+__version__ = "1.12"
+__date__ = "27/11/2023"
 
 # Parameter file path
 param_path = r"D:\path\to\parameter\file.csv
@@ -187,6 +187,8 @@ def load_img_label(dataset):
             images.append(img)
             labels.append(label)
             ids.append(study_id)
+        else:
+            return images, labels, ids
     return images, labels, ids
 
 
