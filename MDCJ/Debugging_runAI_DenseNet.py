@@ -32,7 +32,7 @@ from torchvision.models import densenet121
 # Credentials
 __author__ = "M.D.C. Jansen"
 __version__ = "1.0"
-__date__ = "23/11/2023"
+__date__ = "27/11/2023"
 
 # file paths
 param_path = r"path\to\param\file.csv"
@@ -239,6 +239,7 @@ def load_model(model_path, batch_norm, dropout_rate):
         param.requires_grad = False
 
     state_dict = torch.load(model_path, map_location=device)
+    # state_dict = torch.load(model_path, map_location=device, strict=False)
 
     # Modify the main classifier
     num_ftrs = model.fc.in_features
@@ -261,7 +262,17 @@ def load_model(model_path, batch_norm, dropout_rate):
     # for key, value in state_dict.items():
     #    print(key)
 
+    # model_dict.update(state_dict)
+
     # model.load_state_dict(new_state_dict)
+    model.load_state_dict(state_dict)
+
+    # model_dict = model.state_dict()
+    # current_model = net.state_dict()
+    # keys_vin = torch.load('', map_location=device)
+    # new_state_dict = {k:v if v.size()==model[k].size() else current_model[k] for k,v in zip(model.keys(), keys_vin['model_state_dict'].values())}
+    # model_dict.update(new_state_dict)
+    # model.load_state_dict(model_dict)
 
     model.eval()
     model = model.to(device)
