@@ -31,8 +31,8 @@ from torchvision.models import inception_v3
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.13"
-__date__ = "28/11/2023"
+__version__ = "1.14
+__date__ = "29/11/2023"
 
 # Parameter file path
 param_path = r"D:\path\to\parameter\file.csv
@@ -176,26 +176,35 @@ def custom_transform(image):
     return transforms.functional.to_tensor(image)
 
 def load_img_label(dataset):
-    images = []
-    labels = []
-    ids = []
-    for idx, (img, label, study_id) in enumerate(dataset):
-        if len(images) != 100:
-            images.append(img)
-            labels.append(label)
-            ids.append(study_id)
+    images_len = []
+    labels_len = []
+    ids_len = []
+    for i, (image, label, study_id) in enumerate(dataset):
+        img_tensor = image
+        label_tensor = label
+        study_id_tensor = study_id
+        if len(images_len) != 100:
+            images_len.append(image)
+            labels_len.append(label)
+            ids_len.append(study_id)
+            print(f"Attained {len(images_len)} labels", end='\r')
         else:
-            return images, labels, ids
-    return images, labels, ids
+            print("")
+            print(images_len)
+            import sys
+            sys.exit()
+            return img_tensor, label_tensor, study_id_tensor
+    return img_tensor, label_tensor, study_id_tensor
 
 
 def get_class_counts(dataset):
-    print("Counting classes for dataset...")  # Debug statement
+    #print("Counting classes for dataset...")  # Debug statement
     # logging.info("Counting classes for dataset")
     class_counts = defaultdict(int)
     for idx, (img, label, _) in enumerate(dataset):  # Notice the added underscore
         try:
             class_counts[label] += 1
+            print(f"Processing index: {idx}", end='\r')
             if idx == len(dataset) - 1:
                 print(f"Last index processed: {idx}")  # Debugging line
                 # logging.info(f"Last index processed: {idx}")
@@ -305,22 +314,26 @@ def train(model, train_data_loader, optimizer, scheduler, device, scaler):
     all_predictions = []
     all_labels = []
     y_logits = []
-
-    # images, labels = train_images.to(device), train_labels.to(device)
-    # images = torch.tensor(train_images[i], dtype=torch.float32).to(device)
-
     optimizer.zero_grad()
-    for i in range(len(train_images)):
-        # print(f"Training batch {i+1}/{len(train_data_loader)}...")  # Debug statement
-        # logging.info(f"Training batch {i+1}/{len(train_data_loader)}")
-        # images, labels = train_images[i].to(device), train_labels[i].to(device)
-        images = torch.tensor(train_images[i], dtype=torch.float32).to(device)
-        labels = torch.tensor(train_images[i], dtype=torch.long).to(device)
-        with autocast():
-            outputs, aux_outputs = model(images)
+    for i in train_images:
 
-            loss1 = F.binary_cross_entropy_with_logits(outputs.squeeze(), labels.float())
-            loss2 = F.binary_cross_entropy_with_logits(aux_outputs.squeeze(), labels.float())
+        with autocast():
+            outputs, aux_outputs = model(train_images)
+
+            print("output squeeze:")
+            print(outputs.squeeze())
+
+            print("output train_labels")
+            print(train_labels)
+
+            print("output train_labels.squeeze")
+            print(train_labels.squeeze())
+
+            print("output train_labels.float")
+            print(train_labels, float())
+
+            loss1 = F.binary_cross_entropy_with_logits(outputs.squeeze(), train_labels.float())
+            loss2 = F.binary_cross_entropy_with_logits(aux_outputs.squeeze(), train_labels.float())
 
             loss = loss1 + 0.4 * loss2
 
@@ -649,10 +662,15 @@ if __name__ == '__main__':
     train_class_counts = get_class_counts(train_dataset)
     val_class_counts = get_class_counts(val_dataset)
 
-    train_images = []
-    train_labels = []
-    val_images = []
-    val_labels = []
+    #train_images = []
+    #train_labels = []
+    #val_images = []
+    #val_labels = []
+
+    print(train_images)
+    print(train_images.shape)
+    import sys
+    sys.exit()
 
     print("Loading training images")
     train_images, train_labels, _ = load_img_label(train_dataset)
@@ -676,6 +694,16 @@ if __name__ == '__main__':
     print("Checking for GPU availability...")
     # logging.info("Checking for GPU availability")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    train_images = train_images.unsqueeze(0).expand(parameters['tl_bs'][0], *train_images.shape)
+    print("train_images shape:\t", train_images.shape)
+    print("train_labels_shape:\t", train_labels.shape)
+
+    train_images = torch.tensor(train_images, dtype=torch.float32).to(device)
+    train_labels = torch.tensor(train_labels, dtype=torch.float16).to(device)
+    # study_ids = torch.tensor(study_ids, dtype=torch.long).to(device)
+
+    # images = torch.tensor(train_images[i], dtype=torch.float32).to(device)
+    # labels = torch.tensor(train_images[i], dtype=torch.long).to(device)
     print("Using device:", device)
     # logging.info(f"Using device: {device}")
 
