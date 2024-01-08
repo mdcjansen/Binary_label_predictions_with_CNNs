@@ -18,7 +18,7 @@ import wandb
 from collections import defaultdict
 from PIL import Image
 from scipy import stats
-from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, precision_score, recall_score, roc_curve, auc, confusion_matrix
+from sklearn.metrics import roc_auc_score, accuracy_score, balanced_accuracy_score, f1_score, precision_score, recall_score, roc_curve, auc, confusion_matrix
 from torch.cuda.amp import autocast, GradScaler
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
@@ -27,7 +27,7 @@ from torchvision.models import inception_v3
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.17"
+__version__ = "1.17.1"
 __date__ = "07/12/2023"
 
 # Parameter file path
@@ -241,15 +241,11 @@ def create_model(batch_norm, dropout_rate):
     for param in model.parameters():
         param.requires_grad = False
 
-    # Modify the main classifier
     num_ftrs = model.fc.in_features
     model.fc = CustomHead(num_ftrs, 1, batch_norm, dropout_rate)
-
-    # Modify the auxiliary classifier
     aux_ftrs = model.AuxLogits.fc.in_features
     model.AuxLogits.fc = nn.Linear(aux_ftrs, 1)
 
-    # Making the last few layers trainable
     for param in model.fc.parameters():
         param.requires_grad = True
     for param in model.AuxLogits.fc.parameters():
@@ -403,10 +399,12 @@ def objective(trial):
     early_stop_counter = parameters['es_count']
     early_stop_limit = parameters['es_limit']
 
+    print("Loading training dataloader to device")
     for i, (images, labels, study_ids) in enumerate(train_data_loader):
         train_images, train_labels = images.to(device), labels.to(device)
 
-    for i, (images, labels, study_ids) in enumerate(train_data_loader):
+    print("Loading validation dataloader to device")
+    for i, (images, labels, study_ids) in enumerate(val_data_loader):
         val_images, val_labels = images.to(device), labels.to(device)
 
     for epoch in range(config["num_epochs"]):
@@ -452,9 +450,9 @@ def objective(trial):
 
         log_metrics(validation_metrics, 'val', 'img', validation_loss)
         print(f"Epoch {epoch + 1} - Validation Metrics:",
-              "Acc: {validation_metrics['acc']:.4f},",
-              "F1: {validation_metrics['f1']:.4f},",
-              "Bal Acc: {bal_acc:.4f}")
+              f"Acc: {validation_metrics['acc']:.4f},",
+              f"F1: {validation_metrics['f1']:.4f},",
+              f"Bal Acc: {bal_acc:.4f}")
         print(f"Epoch {epoch + 1} - Start prediction")
         with profiler.profile(record_shapes=True) as profpredict:
             batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probs = predict(
@@ -464,9 +462,9 @@ def objective(trial):
         patient_metrics = calculate_metrics(patient_labels, patient_predictions, patient_probs)
         log_metrics(patient_metrics, 'val', 'ptnt', None)
         print(f"Epoch {epoch + 1} - Patient-Level Metrics:",
-              "Acc: {patient_metrics['acc']:.4f},",
-              "F1: {patient_metrics['f1']:.4f},",
-              "Bal Acc: {patient_metrics['bal_acc']:.4f}")
+              f"Acc: {patient_metrics['acc']:.4f},",
+              f"F1: {patient_metrics['f1']:.4f},",
+              f"Bal Acc: {patient_metrics['bal_acc']:.4f}")
         if trial.should_prune():
             raise optuna.exceptions.TrialPruned()
 
