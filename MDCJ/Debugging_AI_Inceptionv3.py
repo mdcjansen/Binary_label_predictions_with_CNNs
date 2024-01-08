@@ -27,61 +27,59 @@ from torchvision.models import inception_v3
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.21"
+__version__ = "1.22"
 __date__ = "15/12/2023"
 
 # Parameter file path
 param_path = r"D:\path\to\parameter\file.csv"
 
 
-def __init__(self, root_dir, xlsx_dir, transform=None):
-    self.root_dir = root_dir
-    self.transform = transform
-    self.df_labels = pd.read_excel(xlsx_dir)
+class CustomImageDataset(Dataset):
+    def __init__(self, root_dir, xlsx_dir, transform=None):
+        self.root_dir = root_dir
+        self.transform = transform
+        self.df_labels = pd.read_excel(xlsx_dir)
 
-    self.all_data = self._preloading()
+        self.all_data = self._preloading()
 
+    def _preloading(self):
+        all_images = []
+        all_labels = []
 
-def _preloading(self):
-    all_images = []
-    all_labels = []
+        for subdir, _, files in os.walk(self.root_dir):
+            for file in files:
+                if file.endswith(".jpg"):
+                    img_path = os.path.join(subdir, file)
+                    segments = file.split("_")
 
-    for subdir, _, files in os.walk(self.root_dir):
-        for file in files:
-            if file.endswith(".jpg"):
-                img_path = os.path.join(subdir, file)
-                segments = file.split("_")
+                    if len(segments) <= 1:
+                        raise ValueError
 
-                if len(segments) <= 1:
-                    raise ValueError
+                    study_id = segments[1]
+                    label_entries = self.df_labels[self.df_labels['study_id'] == int(study_id)]["label"].values
 
-                study_id = segments[1]
-                label_entries = self.df_labels[self.df_labels['study_id'] == int(study_id)]["label"].values
+                    if len(label_entries) == 0:
+                        label = None
+                    else:
+                        label = label_entries[0]
 
-                if len(label_entries) == 0:
-                    label = None
-                else:
-                    label = label_entries[0]
+                    all_images.append(img_path)
+                    all_labels.append(label)
 
-                all_images.append(img_path)
-                all_labels.append(label)
+        return list(zip(all_images, all_labels))
 
-    return list(zip(all_images, all_labels))
+    def __len__(self):
+        return len(self.all_data)
 
+    def __getitem__(self, index):
+        img_path, label = self.all_data[index]
 
-def __len__(self):
-    return len(self.all_data)
+        image = Image.open(img_path).convert('RGB')
 
+        if self.transform:
+            image = self.transform(image)
 
-def __getitem__(self, index):
-    img_path, label = self.all_data[index]
-
-    image = Image.open(img_path).convert('RGB')
-
-    if self.transform:
-        image = self.transform(image)
-
-    return image, label, os.path.basename(img_path)
+        return image, label, os.path.basename(img_path)
 
 
 class CustomHead(nn.Module):
@@ -160,20 +158,18 @@ def load_parameters(param_path):
 # =============================================================================
 
 
-# =============================================================================
-# def load_img_label(dataset):
-#     images_len = []
-#     labels_len = []
-#     ids_len = []
-#     for i, (image, label, study_id) in enumerate(dataset):
-#         img_tensor = image
-#         label_tensor = label
-#         study_id_tensor = study_id
-#         images_len.append(image)
-#         labels_len.append(label)
-#         ids_len.append(study_id)
-#     return img_tensor, label_tensor, study_id_tensor
-# =============================================================================
+def load_img_label(dataset):
+    images_len = []
+    labels_len = []
+    ids_len = []
+    for i, (image, label, study_id) in enumerate(dataset):
+        img_tensor = image
+        label_tensor = label
+        study_id_tensor = study_id
+        images_len.append(image)
+        labels_len.append(label)
+        ids_len.append(study_id)
+    return img_tensor, label_tensor, study_id_tensor
 
 
 def get_class_counts(dataset):
@@ -296,7 +292,6 @@ def train(model, train_data_loader, optimizer, scheduler, device, scaler):
     train_patient_metrics = calculate_metrics(train_patient_labels, train_patient_predictions, train_patient_probs)
 
     del all_predictions, all_labels, y_logits
-
     return total_loss / len(train_data_loader.dataset), metrics, train_patient_metrics
 
 
@@ -318,14 +313,13 @@ def validate(model, val_data_loader, device):
             all_predictions.extend((torch.sigmoid(outputs.squeeze()) > 0.5).long().tolist())
             all_labels.extend(labels.tolist())
             y_proba.extend(torch.sigmoid(outputs.squeeze().detach().cpu().float()).numpy())
-
             del images, labels
             torch.cuda.empty_cache()
 
         metrics = calculate_metrics(all_labels, all_predictions, y_proba)
         del all_predictions, all_labels, y_proba
 
-    return total_loss / len(val_data_loader.dataset), metrics
+        return total_loss / len(val_data_loader.dataset), metrics
 
 
 def predict(model, data_loader, device):
@@ -359,13 +353,12 @@ def predict(model, data_loader, device):
         patient_predictions = []
         patient_probabilities = []
         patient_labels = []
-
         for study_id, summaries in study_summary.items():
             patient_predictions.append(stats.mode(study_summary[study_id]['predictions'], keepdims=True)[0][0])
             patient_probabilities.append(np.mean(study_summary[study_id]['probs']))
             patient_labels.append(stats.mode(study_summary[study_id]['labels'], keepdims=True)[0][0])
 
-    return batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probabilities
+        return batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probabilities
 
 
 def objective(trial):
@@ -426,7 +419,7 @@ def objective(trial):
         log_metrics(training_metrics, 'train', 'img', training_loss)
         log_metrics(train_patient_metrics, 'train', 'ptnt', None)
         print(
-            f"Epoch {epoch + 1} - Training Metrics:\tLoss: {training_loss:.4f}, Acc: {training_metrics['acc']:.4f}, F1: {training_metrics['f1']:.4f}, {training_metrics['bal_acc']:.4f}")
+            f"Epoch {epoch + 1} - Training Metrics:\t\tAcc: {training_metrics['acc']:.4f}, F1: {training_metrics['f1']:.4f}, {training_metrics['bal_acc']:.4f}, Loss: {training_loss:.4f}")
 
         # =============================================================================
         #         with profiler.profile(record_shapes=True) as profvald:
@@ -451,7 +444,7 @@ def objective(trial):
         else:
             early_stop_counter += 1
             if early_stop_counter >= early_stop_limit:
-                print('Early stopping triggered')  # Debug statement
+                print('Early stopping triggered')
                 print("\n\n\n")
                 break
 
@@ -466,7 +459,7 @@ def objective(trial):
 
         log_metrics(validation_metrics, 'val', 'img', validation_loss)
         print(
-            f"Epoch {epoch + 1} - Validation Metrics:\tLoss: {validation_loss:.4f}, Acc: {validation_metrics['acc']:.4f}, F1: {validation_metrics['f1']:.4f}, Bal Acc: {bal_acc:.4f}")
+            f"Epoch {epoch + 1} - Validation Metrics:\t\tAcc: {validation_metrics['acc']:.4f}, F1: {validation_metrics['f1']:.4f}, Bal Acc: {bal_acc:.4f}, Loss: {validation_loss:.4f}")
 
         batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probs = predict(model,
                                                                                                                val_data_loader,
@@ -474,7 +467,7 @@ def objective(trial):
         patient_metrics = calculate_metrics(patient_labels, patient_predictions, patient_probs)
         log_metrics(patient_metrics, 'val', 'ptnt', None)
         print(
-            f"Epoch {epoch + 1} - Patient-Level Metrics\t Acc: {patient_metrics['acc']:.4f}, F1: {patient_metrics['f1']:.4f}, Bal Acc: {patient_metrics['bal_acc']:.4f}")
+            f"Epoch {epoch + 1} - Patient-Level Metrics:\tAcc: {patient_metrics['acc']:.4f}, F1: {patient_metrics['f1']:.4f}, Bal Acc: {patient_metrics['bal_acc']:.4f}")
 
         if trial.should_prune():
             raise optuna.exceptions.TrialPruned()
