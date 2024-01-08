@@ -27,7 +27,7 @@ from torchvision.models import inception_v3
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.17.1"
+__version__ = "1.18"
 __date__ = "07/12/2023"
 
 # Parameter file path
@@ -156,7 +156,19 @@ def load_img_label(dataset):
         images_len.append(image)
         labels_len.append(label)
         ids_len.append(study_id)
-
+    # =============================================================================
+    #         if len(images_len) != 100:
+    #             images_len.append(image)
+    #             labels_len.append(label)
+    #             ids_len.append(study_id)
+    #             print(f"Attained {len(images_len)} labels", end='\r')
+    #         else:
+    #             print("")
+    #             print(images_len)
+    #             import sys
+    #             sys.exit()
+    #             return img_tensor, label_tensor, study_id_tensor
+    # =============================================================================
     return img_tensor, label_tensor, study_id_tensor
 
 
@@ -174,6 +186,74 @@ def get_class_counts(dataset):
 
     return class_counts
 
+
+# =============================================================================
+# def calculate_metrics(y_true, y_pred, y_proba):
+#     if isinstance(y_true, torch.Tensor):
+#         y_true = y_true.cpu().numpy()
+#     if isinstance(y_pred, torch.Tensor):
+#         y_pred = y_pred.cpu().numpy()
+#
+#     metrics = {
+#         'acc': accuracy_score(y_true, y_pred),
+#         'bal_acc': balanced_accuracy_score(y_true, y_pred),
+#         'f1': 0.0,
+#         'precision': 0.0,
+#         'recall': 0.0
+#     }
+#
+#     for metric, func in [('f1', f1_score), ('precision', precision_score), ('recall', recall_score)]:
+#         try:
+#             metrics[metric] = func(y_true, y_pred)
+#         except:
+#             pass
+#
+#     if isinstance(y_proba, torch.Tensor):
+#         y_proba = y_proba.cpu().numpy()
+#
+#     fpr, tpr, _ = roc_curve(y_true, y_proba)
+#     metrics['roc_auc'] = auc(fpr, tpr)
+#
+#     try:
+#         metrics['cm'] = confusion_matrix(y_true, y_pred)
+#     except Exception as e:
+#         print(f"Error computing confusion matrix: {e}")
+#         metrics['cm'] = None
+#
+#     print("\n")
+#     print(fpr, tpr)
+#     print("\n\nMETRICS BELOW\n:", "{" + "\n".join("{!r}: {!r},".format(k, v) for k, v in metrics.items()) + "}")
+#
+#     return metrics
+#
+#
+# def log_metrics(metrics, split, prefix, loss): #y_true, #y_proba
+#     wandb.log({
+#         f"{prefix}_{split}_loss": loss,
+#         f"{prefix}_{split}_acc": metrics['acc'],
+#         f"{prefix}_{split}_f1": metrics['f1'],
+#         f"{prefix}_{split}_balacc": metrics['bal_acc'],
+#         f"{prefix}_{split}_recall": metrics['recall'],
+#         f"{prefix}_{split}_precision": metrics['precision'],
+#         f"{prefix}_{split}_cnfmatrix": metrics['cm'],
+#         f"{prefix}_{split}_auc": metrics['roc_auc']
+#     })
+#
+# # =============================================================================
+# #     if isinstance(y_true, torch.Tensor):
+# #         y_true = y_true.cpu().numpy()
+# #     if isinstance(y_proba, torch.Tensor):
+# #         y_proba = y_proba.cpu().numpy()
+# #
+# #     fpr, tpr, thresholds = roc_curve(y_true, y_proba)
+# #     roc_data = []
+# #     for i in range(len(fpr)):
+# #         roc-data.append([fpr[i], tpr[i], thresholds[i]])
+# #
+# #     wandb.log({f"{prefix}_{split}_auc": roc_auc}, step=epoch)
+# #     wandb.log({f"{prefix}_{split}_auc-curve": wandb.plot.roc_curve(roc_data)}, step=epoch)
+# # =============================================================================
+# =============================================================================
 
 def calculate_metrics(y_true, y_pred, y_proba):
     if isinstance(y_true, torch.Tensor):
@@ -198,7 +278,7 @@ def calculate_metrics(y_true, y_pred, y_proba):
     if isinstance(y_proba, torch.Tensor):
         y_proba = y_proba.cpu().numpy()
 
-    fpr, tpr, _ = roc_curve(y_true, y_proba)
+    fpr, tpr, thresholds = roc_curve(y_true, y_proba)
     metrics['roc_auc'] = auc(fpr, tpr)
 
     try:
@@ -206,6 +286,14 @@ def calculate_metrics(y_true, y_pred, y_proba):
     except Exception as e:
         print(f"Error computing confusion matrix: {e}")
         metrics['cm'] = None
+
+    print("\n")
+    # =============================================================================
+    #     print(y_true, "\n", y_proba)
+    #     print(fpr, tpr, "\n")
+    #     print(roc_curve(y_true, y_proba))
+    # =============================================================================
+    print("\n\nMETRICS BELOW\n:", "{" + "\n".join("{!r}: {!r},".format(k, v) for k, v in metrics.items()) + "}\n")
 
     return metrics
 
@@ -222,6 +310,24 @@ def log_metrics(metrics, split, prefix, loss):
         f"{prefix}_{split}_auc": metrics['roc_auc']
     })
 
+    # roc_data = [[fpr[i], tpr[i]] for i in range(len(fpr))]
+    # wandb.log({f"{prefix}_{split}_auc-curve": wandb.plot.roc_curve(roc_data)})
+
+
+# =============================================================================
+#     if isinstance(y_true, torch.Tensor):
+#         y_true = y_true.cpu().numpy()
+#     if isinstance(y_proba, torch.Tensor):
+#         y_proba = y_proba.cpu().numpy()
+#
+#     fpr, tpr, thresholds = roc_curve(y_true, y_proba)
+#     roc_data = []
+#     for i in range(len(fpr)):
+#         roc-data.append([fpr[i], tpr[i], thresholds[i]])
+#
+#     wandb.log({f"{prefix}_{split}_auc": roc_auc}, step=epoch)
+#     wandb.log({f"{prefix}_{split}_auc-curve": wandb.plot.roc_curve(roc_data)}, step=epoch)
+# =============================================================================
 
 def create_model(batch_norm, dropout_rate):
     model = inception_v3(pretrained=True, aux_logits=True)
@@ -271,6 +377,7 @@ def train(model, train_data_loader, images, labels, optimizer, scheduler, device
     total_loss += loss.item() * images.size(0)
     scheduler.step()
     metrics = calculate_metrics(all_labels, all_predictions, y_logits)
+    # print("TRAINING METRICS BELOW:\n", "{" + "\n".join("{!r}: {!r},".format(k, v) for k, v in metrics.items()) + "}")
     _, _, train_patient_predictions, train_patient_labels, _, train_patient_probs = predict(model, train_data_loader,
                                                                                             device)
     train_patient_metrics = calculate_metrics(train_patient_labels, train_patient_predictions, train_patient_probs)
@@ -297,6 +404,7 @@ def validate(model, images, labels, val_data_loader, device):
         all_labels.extend(labels.tolist())
         y_proba.extend(torch.sigmoid(outputs.squeeze().detach().cpu().float()).numpy())
         metrics = calculate_metrics(all_labels, all_predictions, y_proba)
+        # print("VALIDATION METRICS BELOW:\n", "{" + "\n".join("{!r}: {!r},".format(k, v) for k, v in metrics.items()) + "}")
 
     print("Validation complete")
 
@@ -397,19 +505,35 @@ def objective(trial):
 
     for epoch in range(config["num_epochs"]):
         print(f"Epoch {epoch + 1} - Start training")
-        with profiler.profile(record_shapes=True) as proftrain:
-            training_loss, training_metrics, train_patient_metrics = train(model, train_data_loader, train_images,
-                                                                           train_labels, optimizer, scheduler, device,
-                                                                           scaler)
-        print("[INFO TRAIN]:\n\n", proftrain.key_averages().table(sort_by="self_cpu_time_total", row_limit=15))
+        # =============================================================================
+        #         with profiler.profile(record_shapes=True) as proftrain:
+        # =============================================================================
+        training_loss, training_metrics, train_patient_metrics = train(model, train_data_loader, train_images,
+                                                                       train_labels, optimizer, scheduler, device,
+                                                                       scaler)
+        # =============================================================================
+        #         print("[INFO TRAIN]:\n\n", proftrain.key_averages().table(sort_by="self_cpu_time_total", row_limit=15))
+        # =============================================================================
         print(f"Epoch {epoch + 1} - Training Loss: {training_loss:.4f}")
         log_metrics(training_metrics, 'train', 'img', training_loss)
         log_metrics(train_patient_metrics, 'train', 'ptnt', None)
+        # =============================================================================
+        #         log_metrics(training_metrics, 'train', 'img', training_loss)
+        #         log_metrics(train_patient_metrics, 'train', 'ptnt', None)
+        # =============================================================================
         print(f"Epoch {epoch + 1} - Start validation")
-        with profiler.profile(record_shapes=True) as profvald:
-            validation_loss, validation_metrics = validate(model, val_images, val_labels, val_data_loader, device)
-        print("[INFO VALD]:\n\n", profvald.key_averages().table(sort_by="self_cpu_time_total", row_limit=15))
+        # =============================================================================
+        #         with profiler.profile(record_shapes=True) as profvald:
+        # =============================================================================
+        validation_loss, validation_metrics = validate(model, val_images, val_labels, val_data_loader, device)
+        # =============================================================================
+        #         print("[INFO VALD]:\n\n", profvald.key_averages().table(sort_by="self_cpu_time_total", row_limit=15))
+        # =============================================================================
         print(f"Epoch {epoch + 1} - Validation Loss: {validation_loss:.4f}")
+        log_metrics(validation_metrics, 'val', 'img', validation_loss)
+        # =============================================================================
+        #         log_metrics(validation_metrics, 'val', 'img', validation_loss)
+        # =============================================================================
         bal_acc = validation_metrics['bal_acc']
         is_best_loss = validation_loss < best_val_loss
 
@@ -436,18 +560,28 @@ def objective(trial):
                 model_csv.write(f"{run.name},bal_acc,epoch={epoch + 1},{','.join(ml_params)}\n")
             model_csv.close()
 
-        log_metrics(validation_metrics, 'val', 'img', validation_loss)
         print(f"Epoch {epoch + 1} - Validation Metrics:",
               f"Acc: {validation_metrics['acc']:.4f},",
               f"F1: {validation_metrics['f1']:.4f},",
               f"Bal Acc: {bal_acc:.4f}")
         print(f"Epoch {epoch + 1} - Start prediction")
-        with profiler.profile(record_shapes=True) as profpredict:
-            batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probs = predict(
-                model, val_data_loader, device)
-        print("[INFO PREDICTION]:\n\n", profpredict.key_averages().table(sort_by="self_cpu_time_total", row_limit=15))
+        # =============================================================================
+        #         with profiler.profile(record_shapes=True) as profpredict:
+        # =============================================================================
+        batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probs = predict(model,
+                                                                                                               val_data_loader,
+                                                                                                               device)
+        # =============================================================================
+        #         print("[INFO PREDICTION]:\n\n", profpredict.key_averages().table(sort_by="self_cpu_time_total", row_limit=15))
+        # =============================================================================
         print(f"Epoch {epoch + 1} - Prediction done")
         patient_metrics = calculate_metrics(patient_labels, patient_predictions, patient_probs)
+        # =============================================================================
+        #         patient_metrics = calculate_metrics(patient_labels, patient_predictions, patient_probs)
+        # =============================================================================
+        print("PATIENT METRICS BELOW:\n",
+              "{" + "\n".join("{!r}: {!r},".format(k, v) for k, v in patient_metrics.items()) + "}\n")
+        log_metrics(patient_metrics, 'val', 'ptnt', None)
         log_metrics(patient_metrics, 'val', 'ptnt', None)
         print(f"Epoch {epoch + 1} - Patient-Level Metrics:",
               f"Acc: {patient_metrics['acc']:.4f},",
