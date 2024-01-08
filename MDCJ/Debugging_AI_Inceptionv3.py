@@ -6,6 +6,7 @@ import logging
 import optuna
 import os
 import pandas as pd
+import random
 import torch
 import torch.autograd.profiler as profiler
 import torch.nn as nn
@@ -18,23 +19,20 @@ import wandb
 from collections import defaultdict
 from PIL import Image
 from scipy import stats
-from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, precision_score, recall_score, \
-    roc_curve, auc, confusion_matrix
-# from time import datetime
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, precision_score, recall_score, roc_curve, auc, confusion_matrix
+#from time import datetime
 from torch.cuda.amp import autocast, GradScaler
 from torch.nn.functional import sigmoid
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 from torchvision.models import inception_v3
+#from torchvision.datasets import DatasetFolder
 
-# from torchvision.datasets import DatasetFolder
-
-### Set with test function
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.12"
-__date__ = "27/11/2023"
+__version__ = "1.13"
+__date__ = "28/11/2023"
 
 # Parameter file path
 param_path = r"D:\path\to\parameter\file.csv
@@ -163,20 +161,19 @@ def custom_transform(image):
     rd_colour_change = random.random() < 0.3
 
     if rd_colour_change:
-        brightness = random.uniform(0.3, 0.7)
-        contrast = random.uniform(0.3, 0.7)
-        saturation = random.uniform(0.3, 0.7)
-        hue = random.uniform(0, 0.3)
+        brightness = random.uniform(0.0, 0.25)
+        contrast = random.uniform(0.0, 0.2)
+        saturation = random.uniform(0.0, 0.4)
+        hue = random.uniform(0.0, 0.5)
 
         image = transforms.functional.adjust_brightness(image, brightness)
         image = transforms.functional.adjust_contrast(image, contrast)
         image = transforms.functional.adjust_saturation(image, saturation)
         image = transforms.functional.adjust_hue(image, hue)
 
-        # image = colour_aug(image)
+        #image = colour_aug(image)
 
     return transforms.functional.to_tensor(image)
-
 
 def load_img_label(dataset):
     images = []
@@ -309,6 +306,9 @@ def train(model, train_data_loader, optimizer, scheduler, device, scaler):
     all_labels = []
     y_logits = []
 
+    # images, labels = train_images.to(device), train_labels.to(device)
+    # images = torch.tensor(train_images[i], dtype=torch.float32).to(device)
+
     optimizer.zero_grad()
     for i in range(len(train_images)):
         # print(f"Training batch {i+1}/{len(train_data_loader)}...")  # Debug statement
@@ -364,6 +364,9 @@ def validate(model, val_data_loader, device):
     all_predictions = []
     all_labels = []
     y_proba = []
+
+    # images, labels = val_images.to(device), val_labels.to(device)
+    # images = torch.tensor(val_images[i], dtype=torch.float32).to(device)
 
     with torch.no_grad():
         for i in range(len(val_images)):
@@ -446,7 +449,7 @@ def predict(model, data_loader, device):
 
         print("Prediction complete.")  # Debug statement
         # logging.info("Prediction complete")
-        return batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probabilities
+    return batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probabilities
 
 
 def objective(trial):
@@ -598,6 +601,7 @@ def objective(trial):
             raise optuna.exceptions.TrialPruned()
 
     run.finish()
+    torch.cuda.empty_cache()
     print(f"Trial {trial.number} complete.")  # Debug statement
     # logging.debug(f"Trial {trial.number} complete.")
 
