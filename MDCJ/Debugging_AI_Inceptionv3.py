@@ -27,7 +27,7 @@ from torchvision.models import inception_v3
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.19"
+__version__ = "1.20"
 __date__ = "15/12/2023"
 
 # Parameter file path
@@ -40,35 +40,46 @@ class CustomImageDataset(Dataset):
         self.transform = transform
         self.df_labels = pd.read_excel(xlsx_dir)
 
-        # Precompute the list of all image paths
-        self.all_images = [os.path.join(subdir, file)
-                           for subdir, dirs, files in os.walk(self.root_dir)
-                           for file in files if file.lower().endswith(('.png', '.jpg', '.jpeg'))]
+        self.all_data = self._preloading()
+
+    def _preloading(self):
+        all_images = []
+        all_labels = []
+
+        for subdir, _, files in os.walk(self.root_dir):
+            for file in files:
+                if file.endswith(".jpg"):
+                    img_path = os.path.join(subdir, file)
+                    segments = file.split("_")
+
+                    if len(segments) <= 1:
+                        raise ValueError
+
+                    study_id = segments[1]
+                    label_entries = self.df_labels[self.df_labels['study_id'] == int(study_id)]["label"].values
+
+                    if len(label_entries) == 0:
+                        label = None
+                    else:
+                        label = label_entries[0]
+
+                    all_images.append(img_path)
+                    all_labels.append(label)
+
+        return list(zip(all_images, all_labels))
 
     def __len__(self):
-        return len(self.all_images)
+        return len(self.all_data)
 
-    def __getitem__(self, idx):
-        img_name = self.all_images[idx]
-        segments = img_name.split('_')
+    def __getitem__(self, index):
+        img_path, label = self.all_data[index]
 
-        if len(segments) <= 1:
-            raise ValueError(f"Unexpected image name format for {img_name}")
+        image = Image.open(img_path).convert('RGB')
 
-        study_id = segments[1]
-        label_entries = self.df_labels[self.df_labels['study_id'] == int(study_id)]['label'].values
-
-        if len(label_entries) == 0:
-            print(f"No label found for study_id: {study_id} in image {img_name}.")
-            label = None
-        else:
-            label = label_entries[0]
-
-        image = Image.open(img_name).convert('RGB')
         if self.transform:
             image = self.transform(image)
 
-        return image, label, study_id
+        return image, label, os.path.basename(img_path)
 
 
 class CustomHead(nn.Module):
@@ -129,20 +140,22 @@ def load_parameters(param_path):
     return input_variables
 
 
-def custom_transform(image):
-    rd_colour_change = random.random() < 0.3
-
-    if rd_colour_change:
-        brightness = random.uniform(0.0, 0.25)
-        contrast = random.uniform(0.0, 0.2)
-        saturation = random.uniform(0.0, 0.4)
-        hue = random.uniform(0.0, 0.5)
-        image = transforms.functional.adjust_brightness(image, brightness)
-        image = transforms.functional.adjust_contrast(image, contrast)
-        image = transforms.functional.adjust_saturation(image, saturation)
-        image = transforms.functional.adjust_hue(image, hue)
-
-    return transforms.functional.to_tensor(image)
+# =============================================================================
+# def custom_transform(image):
+#     rd_colour_change = random.random() < 0.3
+#
+#     if rd_colour_change:
+#         brightness = random.uniform(0.0 , 0.25)
+#         contrast =  random.uniform(0.0 , 0.2)
+#         saturation =  random.uniform(0.0 , 0.4)
+#         hue =  random.uniform(0.0 , 0.5)
+#         image = transforms.functional.adjust_brightness (image, brightness)
+#         image = transforms.functional.adjust_contrast(image, contrast)
+#         image = transforms.functional.adjust_saturation(image, saturation)
+#         image = transforms.functional.adjust_hue(image, hue)
+#
+#     return transforms.functional.to_tensor(image)
+# =============================================================================
 
 
 def load_img_label(dataset):
@@ -204,9 +217,10 @@ def calculate_metrics(y_true, y_pred, y_proba):
         print(f"Error computing confusion matrix: {e}")
         metrics['cm'] = None
 
-    print("\n")
-    print("\n\nMETRICS BELOW CALC METRICS\n:",
-          "{" + "\n".join("{!r}: {!r},".format(k, v) for k, v in metrics.items()) + "}\n")
+    # =============================================================================
+    #     print("\n")
+    #     print("\n\nMETRICS BELOW CALC METRICS\n:", "{" + "\n".join("{!r}: {!r},".format(k, v) for k, v in metrics.items()) + "}\n")
+    # =============================================================================
 
     return metrics
 
@@ -224,23 +238,8 @@ def log_metrics(metrics, split, prefix, loss):
     })
 
 
-# =============================================================================
-# def log_metrics(metrics, split, prefix, loss):
-#     wandb.log({
-#         f"{prefix}_{split}_loss": loss,
-#         f"{prefix}_{split}_acc": metrics[0],
-#         f"{prefix}_{split}_f1": metrics[2],
-#         f"{prefix}_{split}_balacc": metrics[1],
-#         f"{prefix}_{split}_recall": metrics[4],
-#         f"{prefix}_{split}_precision": metrics[3],
-#         f"{prefix}_{split}_cnfmatrix": metrics[6],
-#         f"{prefix}_{split}_auc": metrics[5]
-#     })
-#
-# =============================================================================
-
 def create_model(batch_norm, dropout_rate):
-    model = inception_v3(pretrained=True, aux_logits=True)
+    model = inception_v3(weights='Inception_V3_Weights.DEFAULT', aux_logits=True)
 
     for param in model.parameters():
         param.requires_grad = False
@@ -260,170 +259,89 @@ def create_model(batch_norm, dropout_rate):
     return model, "InceptionV3"
 
 
-# =============================================================================
-# def train(model, train_data_loader, optimizer, scheduler, device, scaler):
-#     model.train()
-#     total_loss = 0
-#     all_predictions = []
-#     all_labels = []
-#     y_logits = []
-#
-#     optimizer.zero_grad()
-#
-#     for i, (images, labels, study_ids) in enumerate(train_data_loader):
-#         images, labels = images.to(device), labels.to(device)
-#         with autocast():
-#             outputs, aux_outputs = model(images)
-#
-#             loss1 = F.binary_cross_entropy_with_logits(outputs.squeeze(), labels.float())
-#             loss2 = F.binary_cross_entropy_with_logits(aux_outputs.squeeze(), labels.float())
-#
-#             loss = loss1 + 0.4*loss2
-#
-#         scaler.scale(loss).backward()
-#
-#         # Adjusting the optimizer step for every batch, instead of every accumulation_steps
-#         scaler.unscale_(optimizer)
-#         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
-#
-#         scaler.step(optimizer)
-#         scaler.update()
-#
-#         optimizer.zero_grad()
-#         torch.cuda.empty_cache()
-#
-#         # Use `outputs` instead of the previous `output`
-#         all_predictions.extend((sigmoid(outputs.squeeze())>0.5).long().tolist())
-#         all_labels.extend(labels.tolist())
-#         y_logits.extend(outputs.squeeze().detach().cpu().numpy())
-#         total_loss += loss.item() * images.size(0)
-#         torch.cuda.empty_cache()
-#
-#     scheduler.step()
-#
-#     metrics = calculate_metrics(all_labels, all_predictions, y_logits)
-#     print(metrics)
-#
-#     # Predicting for training set for patient-level metrics
-#     _, _, train_patient_predictions, train_patient_labels, _, train_patient_probs = predict(model, train_data_loader)
-#     train_patient_metrics = calculate_metrics(train_patient_labels, train_patient_predictions, train_patient_probs)
-#     del all_predictions, all_labels, y_logits
-#     return total_loss / len(train_data_loader.dataset), metrics, train_patient_metrics
-#
-# def validate(model, val_data_loader, device):
-#     model.eval()
-#     total_loss = 0
-#     all_predictions = []
-#     all_labels = []
-#     y_proba = []
-#
-#     with torch.no_grad():
-#         for images, labels, study_ids in val_data_loader:
-#             images, labels = images.to(device), labels.to(device)
-#             with autocast():
-#                 outputs = model(images)  # changed this line
-#
-#                 logits = outputs
-#
-#                 output = logits.view(-1)  # changed this line
-#             loss = F.binary_cross_entropy_with_logits(outputs.squeeze(), labels.float())
-#             total_loss += loss.item() * images.size(0)
-#
-#             all_predictions.extend((sigmoid(outputs.squeeze())>0.5).long().tolist())
-#             all_labels.extend(labels.tolist())
-#             y_proba.extend(sigmoid(outputs.squeeze().detach().cpu().float()).numpy())
-#
-#             del images, labels, output
-#             torch.cuda.empty_cache()  # Freeing up unused memory
-#
-#     metrics = calculate_metrics(all_labels, all_predictions, y_proba)
-#     print(metrics)
-#     # Clearing memory
-#     del all_predictions, all_labels, y_proba
-#
-#     return total_loss / len(val_data_loader.dataset), metrics
-# =============================================================================
-
-def train(model, train_data_loader, train_images, train_labels, optimizer, scheduler, device, scaler):
-    print("Starting training")
+def train(model, train_data_loader, optimizer, scheduler, device, scaler):
     model.train()
     total_loss = 0
     all_predictions = []
     all_labels = []
     y_logits = []
+
     optimizer.zero_grad()
 
-    for images, labels in train_data_loader:
-        images, labels = images.to(device, dtype=torch.float16), labels.to(device)
-        # =============================================================================
-        #         images, labels = train_images[i].to(device), train_labels[i].to(device)
-        # =============================================================================
+    for i, (images, labels, study_ids) in enumerate(train_data_loader):
+        # print(f"Training batch {i+1}/{len(train_data_loader)}...")
+        # logging.info(f"Training batch {i+1}/{len(train_data_loader)}")
+        images, labels = images.to(device), labels.to(device)
         with autocast():
-            outputs, aux_outputs = model(train_images)
-            loss1 = F.binary_cross_entropy_with_logits(outputs.squeeze(), train_labels.float())
-            loss2 = F.binary_cross_entropy_with_logits(aux_outputs.squeeze(), train_labels.float())
+            outputs, aux_outputs = model(images)
+            loss1 = F.binary_cross_entropy_with_logits(outputs.squeeze(), labels.float())
+            loss2 = F.binary_cross_entropy_with_logits(aux_outputs.squeeze(), labels.float())
             loss = loss1 + 0.4 * loss2
 
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
-            scaler.step(optimizer)
-            scaler.update()
+        scaler.scale(loss).backward()
+        scaler.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
+        scaler.step(optimizer)
+        scaler.update()
 
-            optimizer.zero_grad()
+        optimizer.zero_grad()
 
-            all_predictions.extend((torch.sigmoid(outputs.squeeze()) > 0.5).long().tolist())
-            all_labels.extend(train_labels.tolist())
-            y_logits.extend(outputs.squeeze().detach().cpu().numpy())
-            total_loss += loss.item() * train_images.size(0)
-
-            torch.cuda.empty_cache()
+        all_predictions.extend((torch.sigmoid(outputs.squeeze()) > 0.5).long().tolist())
+        all_labels.extend(labels.tolist())
+        y_logits.extend(outputs.squeeze().detach().cpu().numpy())
+        total_loss += loss.item() * images.size(0)
+        torch.cuda.empty_cache()
 
     scheduler.step()
     metrics = calculate_metrics(all_labels, all_predictions, y_logits)
-    # print("TRAINING METRICS BELOW:\n", "{" + "\n".join("{!r}: {!r},".format(k, v) for k, v in metrics.items()) + "}")
     _, _, train_patient_predictions, train_patient_labels, _, train_patient_probs = predict(model, train_data_loader,
                                                                                             device)
-
     train_patient_metrics = calculate_metrics(train_patient_labels, train_patient_predictions, train_patient_probs)
-    print("Training complete\nMetrics:\n", train_patient_metrics)
+    # =============================================================================
+    #     print("Training complete.")
+    # =============================================================================
 
-    del all_predictions, all_labels, y_logits
-
+    del all_predictions, all_labels, y_logits  # Clearing memory
     return total_loss / len(train_data_loader.dataset), metrics, train_patient_metrics
 
 
-def validate(model, images, labels, val_data_loader, device):
-    print("Starting validation")
+def validate(model, val_data_loader, device):
+    # print("Starting validation...")
+    # logging.info("Starting validation")
     model.eval()
     total_loss = 0
     all_predictions = []
     all_labels = []
     y_proba = []
 
-    for i in range(len(images)):
-        with torch.no_grad():
+    with torch.no_grad():
+        for i, (images, labels, study_ids) in enumerate(val_data_loader):
+            # print(f"Validating batch {i+1}/{len(val_data_loader)}...")
+            images, labels = images.to(device), labels.to(device)
             with autocast():
-                outputs = model(images)
+                outputs = model(images)  # Use outputs directly
                 loss = F.binary_cross_entropy_with_logits(outputs.squeeze(), labels.float())
 
             total_loss += loss.item() * images.size(0)
             all_predictions.extend((torch.sigmoid(outputs.squeeze()) > 0.5).long().tolist())
             all_labels.extend(labels.tolist())
-        y_proba.extend(torch.sigmoid(outputs.squeeze().detach().cpu().float()).numpy())
+            y_proba.extend(torch.sigmoid(outputs.squeeze().detach().cpu().float()).numpy())
+            del images, labels
+            torch.cuda.empty_cache()
 
-    metrics = calculate_metrics(all_labels, all_predictions, y_proba)
-    # print("VALIDATION METRICS BELOW:\n", "{" + "\n".join("{!r}: {!r},".format(k, v) for k, v in metrics.items()) + "}")
+        metrics = calculate_metrics(all_labels, all_predictions, y_proba)
+        # =============================================================================
+        #         print("Validation complete.")
+        # =============================================================================
+        del all_predictions, all_labels, y_proba
 
-    print("Validation complete\nMetrics:\n", metrics)
-
-    del all_predictions, all_labels, y_proba
-
-    return total_loss / len(val_data_loader.dataset), metrics
+        return total_loss / len(val_data_loader.dataset), metrics
 
 
 def predict(model, data_loader, device):
-    print("Starting prediction")
+    # =============================================================================
+    #     print("Starting prediction...")
+    # =============================================================================
     model.eval()
     model = model.to(device)
     batch_predictions = []
@@ -440,26 +358,37 @@ def predict(model, data_loader, device):
             y_proba.extend(probs)
             batch_predictions.extend((probs > 0.5).astype(int).tolist())
             batch_labels.extend(labels.tolist())
+
             for prediction, probability, label, study_id in zip(batch_predictions, probs, batch_labels, study_ids):
                 if study_id not in study_summary:
                     study_summary[study_id] = {'predictions': [], 'probs': [], 'labels': []}
                 study_summary[study_id]['predictions'].append(prediction)
                 study_summary[study_id]['probs'].append(probability)
                 study_summary[study_id]['labels'].append(label)
+
+            del inputs, outputs, labels, study_ids
+            torch.cuda.empty_cache()
+
         patient_predictions = []
         patient_probabilities = []
         patient_labels = []
         for study_id, summaries in study_summary.items():
-            mode_prediction, _ = stats.mode(summaries['predictions'])
-            mean_probability = np.mean(summaries['probs'])
-            mode_label, _ = stats.mode(summaries['labels'])
-            patient_predictions.append(mode_prediction[0])
-            patient_probabilities.append(mean_probability)
-            patient_labels.append(mode_label[0])
+            patient_predictions.append(stats.mode(study_summary[study_id]['predictions'], keepdims=True)[0][0])
+            patient_probabilities.append(np.mean(study_summary[study_id]['probs']))
+            patient_labels.append(stats.mode(study_summary[study_id]['labels'], keepdims=True)[0][0])
+        # =============================================================================
+        #             mode_prediction, _ = stats.mode(summaries['predictions'])
+        #             mean_probability = np.mean(summaries['probs'])
+        #             mode_label, _ = stats.mode(summaries['labels'])
+        #             patient_predictions.append(mode_prediction[0])
+        #             patient_probabilities.append(mean_probability)
+        #             patient_labels.append(mode_label[0])
+        # =============================================================================
 
-    print("Prediction complete.")
-
-    return batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probabilities
+        # =============================================================================
+        #         print("Prediction complete.")
+        # =============================================================================
+        return batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probabilities
 
 
 def objective(trial):
@@ -505,90 +434,31 @@ def objective(trial):
     early_stop_counter = parameters['es_count']
     early_stop_limit = parameters['es_limit']
 
-    train_images = []
-    train_labels = []
-    val_images = []
-    val_labels = []
-
-    print("Loading training dataloader to device")
-    for i, (images, labels, study_ids) in enumerate(train_data_loader):
-        # images, labels = images.to(device), labels.to(device)
-        train_images.append(images)
-        train_labels.append(labels)
-
-    print("Loading validation dataloader to device")
-    for i, (images, labels, study_ids) in enumerate(val_data_loader):
-        # images, labels = images.to(device), labels.to(device)
-        val_images.append(images)
-        val_labels.append(labels)
-
-    # =============================================================================
-    #     #print(train_images, train_labels, study_ids)
-    #     print(len(train_images), len(train_labels), len(study_ids))
-    #     #print(val_images, val_labels, study_ids)
-    #     print(len(val_images), len(val_labels), len(study_ids))
-    #     import sys
-    #     sys.exit()
-    # =============================================================================
-
-    # =============================================================================
-    #     print("Loading training dataloader to device")
-    #     for i, (images, labels, study_ids) in enumerate(train_data_loader):
-    #         train_images, train_labels = images.to(device), labels.to(device)
-    #
-    #     print(train_images, train_labels, study_ids)
-    #     print(len(train_images), len(train_labels), len(study_ids))
-    #
-    #     print("Loading validation dataloader to device")
-    #     for i, (images, labels, study_ids) in enumerate(val_data_loader):
-    #         val_images, val_labels = images.to(device), labels.to(device)
-    #
-    #     print(val_images, val_labels, study_ids)
-    #     print(len(val_images), len(val_labels), len(study_ids))
-    #     import sys
-    #     sys.exit()
-    # =============================================================================
-
     for epoch in range(config["num_epochs"]):
-        print(f"Epoch {epoch + 1} - Start training")
+        print(f"Epoch {epoch + 1} - Started")
 
         # =============================================================================
         #         with profiler.profile(record_shapes=True) as proftrain:
-        # =============================================================================
-        # =============================================================================
-        #         training_loss, training_metrics, train_patient_metrics = train(model, train_data_loader, train_images, train_labels, optimizer, scheduler, device, scaler)
-        # =============================================================================
-        training_loss, training_metrics, train_patient_metrics = train(model, train_data_loader, optimizer, scheduler,
-                                                                       device, scaler)
-        # =============================================================================
-        #         training_loss, training_metrics, train_patient_metrics = train(model, train_data_loader, optimizer, scheduler, device, scaler)
-        # =============================================================================
-        # =============================================================================
+        #             training_loss, training_metrics, train_patient_metrics = train(model, train_data_loader, optimizer, scheduler, device, scaler)
         #         print("[INFO TRAIN]:\n\n", proftrain.key_averages().table(sort_by="self_cpu_time_total", row_limit=15))
         # =============================================================================
-        print(f"Epoch {epoch + 1} - Training Loss: {training_loss:.4f}")
+
+        training_loss, training_metrics, train_patient_metrics = train(model, train_data_loader, optimizer, scheduler,
+                                                                       device, scaler)
+
         log_metrics(training_metrics, 'train', 'img', training_loss)
         log_metrics(train_patient_metrics, 'train', 'ptnt', None)
-        # =============================================================================
-        #         log_metrics(training_metrics, 'train', 'img', training_loss)
-        #         log_metrics(train_patient_metrics, 'train', 'ptnt', None)
-        # =============================================================================
-        print(f"Epoch {epoch + 1} - Start validation")
+        print(
+            f"Epoch {epoch + 1} - Training Metrics:\t\tLoss: {training_loss:.4f}, Acc: {training_metrics['acc']:.4f}, F1: {training_metrics['f1']:.4f}, {training_metrics['bal_acc']:.4f}")
+
         # =============================================================================
         #         with profiler.profile(record_shapes=True) as profvald:
-        # =============================================================================
-        validation_loss, validation_metrics = validate(model, val_images, val_labels, val_data_loader, device)
-        # =============================================================================
-        #         validation_loss, validation_metrics = validate(model, val_data_loader, device)
-        # =============================================================================
-        # =============================================================================
+        #             validation_loss, validation_metrics = validate(model, val_data_loader, device)
         #         print("[INFO VALD]:\n\n", profvald.key_averages().table(sort_by="self_cpu_time_total", row_limit=15))
         # =============================================================================
-        print(f"Epoch {epoch + 1} - Validation Loss: {validation_loss:.4f}")
-        log_metrics(validation_metrics, 'val', 'img', validation_loss)
-        # =============================================================================
-        #         log_metrics(validation_metrics, 'val', 'img', validation_loss)
-        # =============================================================================
+
+        validation_loss, validation_metrics = validate(model, val_data_loader, device)
+
         bal_acc = validation_metrics['bal_acc']
         is_best_loss = validation_loss < best_val_loss
 
@@ -600,10 +470,13 @@ def objective(trial):
                 ml_params = [f"{key}={value}" for key, value in config.items() if key not in ['project']]
                 model_csv.write(f"{run.name},loss,epoch={epoch + 1},{','.join(ml_params)}\n")
             model_csv.close()
+
         else:
             early_stop_counter += 1
             if early_stop_counter >= early_stop_limit:
-                print("Early stopping triggered\n\n\n")
+                # logging.error("Early stopping triggered")
+                print('Early stopping triggered')  # Debug statement
+                print("\n\n\n")
                 break
 
         is_best_bal_acc = bal_acc > best_bal_acc
@@ -615,41 +488,24 @@ def objective(trial):
                 model_csv.write(f"{run.name},bal_acc,epoch={epoch + 1},{','.join(ml_params)}\n")
             model_csv.close()
 
-        print(f"Epoch {epoch + 1} - Validation Metrics:",
-              f"Acc: {validation_metrics['acc']:.4f},",
-              f"F1: {validation_metrics['f1']:.4f},",
-              f"Bal Acc: {bal_acc:.4f}")
-        print(f"Epoch {epoch + 1} - Start prediction")
-        # =============================================================================
-        #         with profiler.profile(record_shapes=True) as profpredict:
-        # =============================================================================
+        log_metrics(validation_metrics, 'val', 'img', validation_loss)
+        print(
+            f"Epoch {epoch + 1} - Validation Metrics:\tLoss: {validation_loss:.4f}, Acc: {validation_metrics['acc']:.4f}, F1: {validation_metrics['f1']:.4f}, Bal Acc: {bal_acc:.4f}")
+
         batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probs = predict(model,
                                                                                                                val_data_loader,
                                                                                                                device)
-        # =============================================================================
-        #         batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probs = predict(model, val_data_loader)
-        # =============================================================================
-        # =============================================================================
-        #         print("[INFO PREDICTION]:\n\n", profpredict.key_averages().table(sort_by="self_cpu_time_total", row_limit=15))
-        # =============================================================================
-        print(f"Epoch {epoch + 1} - Prediction done")
         patient_metrics = calculate_metrics(patient_labels, patient_predictions, patient_probs)
-        # =============================================================================
-        #         patient_metrics = calculate_metrics(patient_labels, patient_predictions, patient_probs)
-        # =============================================================================
-        print("PATIENT METRICS BELOW FULL EPOCH:\n",
-              "{" + "\n".join("{!r}: {!r},".format(k, v) for k, v in patient_metrics.items()) + "}\n")
         log_metrics(patient_metrics, 'val', 'ptnt', None)
-        log_metrics(patient_metrics, 'val', 'ptnt', None)
-        print(f"Epoch {epoch + 1} - Patient-Level Metrics:",
-              f"Acc: {patient_metrics['acc']:.4f},",
-              f"F1: {patient_metrics['f1']:.4f},",
-              f"Bal Acc: {patient_metrics['bal_acc']:.4f}")
+        print(
+            f"Epoch {epoch + 1} - Patient-Level Metrics\t Acc: {patient_metrics['acc']:.4f}, F1: {patient_metrics['f1']:.4f}, Bal Acc: {patient_metrics['bal_acc']:.4f}")
+
         if trial.should_prune():
             raise optuna.exceptions.TrialPruned()
 
+        print(f"Epoch {epoch + 1} - Finished\n")
+
     run.finish()
-    torch.cuda.empty_cache()
     print(f"Trial {trial.number} complete.")
 
     return best_val_loss
@@ -668,7 +524,10 @@ if __name__ == '__main__':
     parameters = load_parameters(param_path)
     root_dir = parameters['root_dir']
     xlsx_dir = parameters['xlsx_dir']
-    transform = transforms.Compose([custom_transform])
+    # =============================================================================
+    #     transform = transforms.Compose([custom_transform])
+    # =============================================================================
+    transform = transforms.Compose([transforms.ToTensor()])
 
     train_dataset = CustomImageDataset(os.path.join(parameters['root_dir'],
                                                     parameters['train_dir']),
