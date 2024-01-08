@@ -31,61 +31,46 @@ from torchvision.models import inception_v3
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.14.3"
-__date__ = "29/11/2023"
+__version__ = "1.15"
+__date__ = "05/12/2023"
 
 # Parameter file path
-param_path = r"D:\path\to\parameter\file.csv
+param_path = r"D:\path\to\parameter\file.csv"
 
 
 class CustomImageDataset(Dataset):
     def __init__(self, root_dir, xlsx_dir, transform=None):
-        # print("Initializing CustomImageDataset...")  # Debug statement
         self.root_dir = root_dir
         self.transform = transform
         self.df_labels = pd.read_excel(xlsx_dir)
-
-        # Precompute the list of all image paths
         self.all_images = [os.path.join(subdir, file)
                            for subdir, dirs, files in os.walk(self.root_dir)
-                           for file in files if file.lower().endswith(('.png', '.jpg', '.jpeg'))]
-
-        # Debug: Print the first few image paths
-        # print(f"First few image paths: {self.all_images[:5]}")  # Debug statement
+                           for file in files if file.lower().endswith(('.png',
+                                                                       '.jpg',
+                                                                       '.jpeg'
+                                                                       ))]
 
     def __len__(self):
         return len(self.all_images)
 
     def __getitem__(self, idx):
-        # print(f"__getitem__ called for index: {idx}")  # Debug statement
         img_name = self.all_images[idx]
-
-        # Extract study_id from image name
         segments = img_name.split('_')
 
         if len(segments) <= 1:
             raise ValueError(f"Unexpected image name format for {img_name}")
 
         study_id = segments[1]
-
-        # Debug: Print the extracted study_id
-        # print(f"Extracted study_id: {study_id}")  # Debug statement
-
-        # Get label from Excel
         label_entries = self.df_labels[self.df_labels['study_id'] == int(study_id)]['label'].values
 
-        # Debug: Print the label entries from the DataFrame
-        # print(f"Label entries for study_id {study_id}: {label_entries}")  # Debug statement
-
         if len(label_entries) == 0:
-            print(f"No label found for study_id: {study_id} in image {img_name}.")  # Debug statement
-            # logging.warning(f"No label found for study_id: {study_id} in image {img_name}.")
+            print(f"No label found for study_id: {study_id} in image {img_name}.")
             label = None
         else:
             label = label_entries[0]
 
-        # Load image
         image = Image.open(img_name).convert('RGB')
+
         if self.transform:
             image = self.transform(image)
 
@@ -96,10 +81,7 @@ class CustomHead(nn.Module):
     def __init__(self, input_size, output_size, batch_norm, dropout_rate):
         super(CustomHead, self).__init__()
         self.fc = nn.Linear(input_size, output_size)
-
-        # Conditionally create the BatchNorm1d layer
         self.batch_norm = nn.BatchNorm1d(input_size) if batch_norm else None
-
         self.dropout = nn.Dropout(dropout_rate)
 
     def forward(self, x):
@@ -107,22 +89,21 @@ class CustomHead(nn.Module):
             x = self.batch_norm(x)
 
         x = self.fc(x)
-
-        # Apply dropout after linear layer (since there's no activation function here)
         x = self.dropout(x)
 
         return x
 
 
 def generate_filename(prefix, run_name, config, criterion, epoch):
-    """Generate a filename based on the model configuration."""
-    params = [f"{key}={value}" for key, value in config.items() if key not in ['project']]
     return os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                        os.path.join("Best models", f"{prefix}_{run_name}_epoch_{epoch + 1}_{criterion}.pt"))
+                        os.path.join("Best models",
+                                     f"{prefix}_{run_name}_epoch_{epoch + 1}_{criterion}.pt"
+                                     ))
 
 
 def load_parameters(param_path):
     input_param = {}
+
     with open(param_path, 'r') as param_file:
         details = csv.DictReader(param_file)
         for d in details:
@@ -165,58 +146,46 @@ def custom_transform(image):
         contrast = random.uniform(0.0, 0.2)
         saturation = random.uniform(0.0, 0.4)
         hue = random.uniform(0.0, 0.5)
-
         image = transforms.functional.adjust_brightness(image, brightness)
         image = transforms.functional.adjust_contrast(image, contrast)
         image = transforms.functional.adjust_saturation(image, saturation)
         image = transforms.functional.adjust_hue(image, hue)
 
-        # image = colour_aug(image)
-
     return transforms.functional.to_tensor(image)
 
 
 def load_img_label(dataset):
-    images_len = []
-    labels_len = []
-    ids_len = []
-    for i, (image, label, study_id) in enumerate(dataset):
-        img_tensor = image
-        label_tensor = label
-        study_id_tensor = study_id
-        if len(images_len) != 100:
-            images_len.append(image)
-            labels_len.append(label)
-            ids_len.append(study_id)
-            print(f"Attained {len(images_len)} labels", end='\r')
-        else:
-            print("")
-            print(images_len)
-            import sys
-            sys.exit()
-            return img_tensor, label_tensor, study_id_tensor
-    return img_tensor, label_tensor, study_id_tensor
+    images = []
+    labels = []
+    ids = []
+
+    for idx, (img, label, study_id) in enumerate(dataset):
+        images.append(img)
+        labels.append(label)
+        ids.append(study_id)
+
+    return images, labels, ids
 
 
 def get_class_counts(dataset):
-    # print("Counting classes for dataset...")  # Debug statement
-    # logging.info("Counting classes for dataset")
+    print("[{time}][INFO]:\tCounting classes for dataset"
+          .format(time=datetime.now().strftime("%H:%M:%S")
+                  )
+          )
     class_counts = defaultdict(int)
-    for idx, (img, label, _) in enumerate(dataset):  # Notice the added underscore
+
+    for idx, (img, label, _) in enumerate(dataset):
         try:
             class_counts[label] += 1
-            print(f"Processing index: {idx}", end='\r')
             if idx == len(dataset) - 1:
-                print(f"Last index processed: {idx}")  # Debugging line
-                # logging.info(f"Last index processed: {idx}")
+                print(f"Last index processed: {idx}")
         except Exception as e:
-            print(f"Error processing image at index {idx}: {e}")  # Debug statement
-            # logging.error(f"Error processing image at index {idx}: {e}")
+            print(f"Error processing image at index {idx}: {e}")
+
     return class_counts
 
 
 def calculate_metrics(y_true, y_pred, y_proba):
-    # Assuming y_true and y_pred are already numpy arrays or Python lists. If they are tensors, convert them only once.
     if isinstance(y_true, torch.Tensor):
         y_true = y_true.cpu().numpy()
     if isinstance(y_pred, torch.Tensor):
@@ -230,45 +199,35 @@ def calculate_metrics(y_true, y_pred, y_proba):
         'recall': 0.0
     }
 
-    # Calculate precision, recall, and F1 score, handling any exceptions
-    for metric, func in [('f1', f1_score), ('precision', precision_score), ('recall', recall_score)]:
+    for metric, func in [('f1', f1_score),
+                         ('precision', precision_score),
+                         ('recall', recall_score
+                          )]:
         try:
             metrics[metric] = func(y_true, y_pred)
         except:
-            pass  # Handle the exception or pass in this context means to ignore the error and proceed
+            pass
 
     if isinstance(y_proba, torch.Tensor):
         y_proba = y_proba.cpu().numpy()
 
-    # Calculate the ROC AUC
     fpr, tpr, _ = roc_curve(y_true, y_proba)
     metrics['roc_auc'] = auc(fpr, tpr)
 
-    # Attempt to calculate the confusion matrix
     try:
         metrics['cm'] = confusion_matrix(y_true, y_pred)
     except Exception as e:
-        print(f"Error computing confusion matrix: {e}")
-        # logging.error(f"Error computing confusion matrix: {e}")
+        print("[{time}][ERROR]:\tError computing confusion matrix: {e}"
+              .format(time=datetime.now().strftime("%H:%M:%S"),
+                      e=e
+                      )
+              )
         metrics['cm'] = None
 
-    return metrics  # Return the metrics dictionary directly
+    return metrics
 
 
 def log_metrics(metrics, split, prefix, loss):
-    # Log metrics using a dictionary with W&B
-
-    # logging.info("wandb metric logging:\n"
-    # f"{prefix}_{split}_loss: {loss}\n"
-    # f"{prefix}_{split}_acc: {metrics['acc']}\n"
-    # f"{prefix}_{split}_f1: {metrics['f1']}\n"
-    # f"{prefix}_{split}_balacc: {metrics['bal_acc']}\n"
-    # f"{prefix}_{split}_recall: {metrics['recall']}\n"
-    # f"{prefix}_{split}_precision: {metrics['precision']}\n"
-    # f"{prefix}_{split}_cnfmatrix: {metrics['cm']}\n"
-    # f"{prefix}_{split}_auc: {metrics['roc_auc']}\n"
-    # )
-
     wandb.log({
         f"{prefix}_{split}_loss": loss,
         f"{prefix}_{split}_acc": metrics['acc'],
@@ -282,87 +241,90 @@ def log_metrics(metrics, split, prefix, loss):
 
 
 def create_model(batch_norm, dropout_rate):
-    # logging.info("Creating model")
     model = inception_v3(pretrained=True, aux_logits=True)
 
     for param in model.parameters():
         param.requires_grad = False
 
-    # Modify the main classifier
     num_ftrs = model.fc.in_features
     model.fc = CustomHead(num_ftrs, 1, batch_norm, dropout_rate)
-
-    # Modify the auxiliary classifier
     aux_ftrs = model.AuxLogits.fc.in_features
     model.AuxLogits.fc = nn.Linear(aux_ftrs, 1)
 
-    # Making the last few layers trainable
     for param in model.fc.parameters():
         param.requires_grad = True
+
     for param in model.AuxLogits.fc.parameters():
         param.requires_grad = True
 
     model = model.to(device)
-    # logging.info("Model has been created")
 
     return model, "InceptionV3"
 
 
-def train(model, train_data_loader, images, labels, optimizer, scheduler, device, scaler):
-    print("Starting training...")  # Debug statement
-    # logging.info("Starting training")
+def train(model, train_data_loader, optimizer, scheduler, device, scaler):
     model.train()
     total_loss = 0
     all_predictions = []
     all_labels = []
     y_logits = []
-
     optimizer.zero_grad()
 
-    # for i, (images, labels, study_ids) in enumerate(train_data_loader):
-    # print(f"Training batch {i+1}/{len(train_data_loader)}...")  # Debug statement
-    # logging.info(f"Training batch {i+1}/{len(train_data_loader)}")
-    #    images, labels = images.to(device), labels.to(device)
-    ##TABBED BACK
-    with autocast():
-        outputs, aux_outputs = model(images)
-        loss1 = F.binary_cross_entropy_with_logits(outputs.squeeze(), labels.float())
-        loss2 = F.binary_cross_entropy_with_logits(aux_outputs.squeeze(), labels.float())
+    for i in range(len(train_images)):
+        images = torch.tensor(train_images[i],
+                              dtype=torch.float32
+                              ).to(device)
+        labels = torch.tensor(train_images[i],
+                              dtype=torch.long
+                              ).to(device)
+        with autocast():
+            outputs, aux_outputs = model(images)
+            loss1 = F.binary_cross_entropy_with_logits(outputs.squeeze(),
+                                                       labels.float()
+                                                       )
+            loss2 = F.binary_cross_entropy_with_logits(aux_outputs.squeeze(),
+                                                       labels.float()
+                                                       )
+            loss = loss1 + 0.4 * loss2
+        scaler.scale(loss).backward()
+        scaler.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(model.parameters(),
+                                       max_norm=1
+                                       )
+        scaler.step(optimizer)
+        scaler.update()
+        optimizer.zero_grad()
+        all_predictions.extend((torch.sigmoid(outputs.squeeze()) > 0.5)
+                               .long()
+                               .tolist()
+                               )
+        all_labels.extend(labels.tolist())
+        y_logits.extend(outputs.squeeze()
+                        .detach()
+                        .cpu()
+                        .numpy())
+        total_loss += loss.item() * images.size(0)
 
-        loss = loss1 + 0.4 * loss2
-
-    scaler.scale(loss).backward()
-
-    # Adjusting the optimizer step for every batch, instead of every accumulation_steps
-    scaler.unscale_(optimizer)
-    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
-
-    scaler.step(optimizer)
-    scaler.update()
-
-    optimizer.zero_grad()
-
-    all_predictions.extend((torch.sigmoid(outputs.squeeze()) > 0.5).long().tolist())
-    all_labels.extend(labels.tolist())
-    y_logits.extend(outputs.squeeze().detach().cpu().numpy())
-    total_loss += loss.item() * images.size(0)
     scheduler.step()
-    metrics = calculate_metrics(all_labels, all_predictions, y_logits)
-    # print(f"Completed training batch {i+1}/{len(train_data_loader)}.")  # Debug statement
-    # logging.info(f"Completed training batch {i+1}/{len(train_data_loader)}")
-
-    # Predicting for training set for patient-level metrics
-    _, _, train_patient_predictions, train_patient_labels, _, train_patient_probs = predict(model, train_data_loader,
-                                                                                            device)
-    train_patient_metrics = calculate_metrics(train_patient_labels, train_patient_predictions, train_patient_probs)
-    print("Training complete.")  # Debug statement
-    # logging.info("Training complete")
+    metrics = calculate_metrics(all_labels,
+                                all_predictions,
+                                y_logits)
+    _, _, train_patient_predictions, train_patient_labels, _, train_patient_probs = predict(model,
+                                                                                            train_data_loader,
+                                                                                            device
+                                                                                            )
+    train_patient_metrics = calculate_metrics(train_patient_labels,
+                                              train_patient_predictions,
+                                              train_patient_probs
+                                              )
+    print("[{time}][INFO]:\tTraining complete."
+          .format(time=datetime.now().strftime("%H:%M:%S")
+                  )
+          )
     return total_loss / len(train_data_loader.dataset), metrics, train_patient_metrics
 
 
-def validate(model, images, labels, val_data_loader, device):
-    print("Starting validation...")  # Debug statement
-    # logging.info("Starting validation")
+def validate(model, val_data_loader, device):
     model.eval()
     total_loss = 0
     all_predictions = []
@@ -370,36 +332,43 @@ def validate(model, images, labels, val_data_loader, device):
     y_proba = []
 
     with torch.no_grad():
-        # for i, (images, labels, study_ids) in enumerate(val_data_loader):
-        # print(f"Validating batch {i+1}/{len(val_data_loader)}...")  # Debug statement
-        # logging.info(f"Validating batch {i+1}/{len(val_data_loader)}")
-        # images, labels = images.to(device), labels.to(device)
-        with autocast():
-            outputs = model(images)  # Use outputs directly
-            loss = F.binary_cross_entropy_with_logits(outputs.squeeze(), labels.float())
+        for i in range(len(val_images)):
+            images = torch.tensor(train_images[i],
+                                  dtype=torch.float32
+                                  ).to(device)
+            labels = torch.tensor(train_images[i],
+                                  dtype=torch.long
+                                  ).to(device)
+            with autocast():
+                outputs = model(images)
+                loss = F.binary_cross_entropy_with_logits(outputs.squeeze(),
+                                                          labels.float()
+                                                          )
+            total_loss += loss.item() * images.size(0)
+            all_predictions.extend((torch.sigmoid(outputs.squeeze()) > 0.5
+                                    ).long().tolist())
+            all_labels.extend(labels.tolist())
+            y_proba.extend(torch.sigmoid(outputs.squeeze()
+                                         .detach()
+                                         .cpu()
+                                         .float())
+                           .numpy())
+        metrics = calculate_metrics(all_labels,
+                                    all_predictions,
+                                    y_proba)
+        print("[{time}][INFO]:\tValidation complete."
+              .format(time=datetime.now().strftime("%H:%M:%S")
+                      )
+              )
 
-        total_loss += loss.item() * images.size(0)
-
-        all_predictions.extend((torch.sigmoid(outputs.squeeze()) > 0.5).long().tolist())
-        all_labels.extend(labels.tolist())
-        y_proba.extend(torch.sigmoid(outputs.squeeze().detach().cpu().float()).numpy())
-
-        # del images, labels
-        # torch.cuda.empty_cache()
-
-        metrics = calculate_metrics(all_labels, all_predictions, y_proba)
-        print("Validation complete.")  # Debug statement
-        # logging.info("Validation complete")
-
-        # Clearing memory
-        # del all_predictions, all_labels, y_proba
-
-        return total_loss / len(val_data_loader.dataset), metrics
+    return total_loss / len(val_data_loader.dataset), metrics
 
 
 def predict(model, data_loader, device):
-    print("Starting prediction...")  # Debug statement
-    # logging.info("Starting prediction")
+    print("[{time}][INFO]:\tStarting prediction"
+          .format(time=datetime.now().strftime("%H:%M:%S")
+                  )
+          )
     model.eval()
     model = model.to(device)
     batch_predictions = []
@@ -408,32 +377,31 @@ def predict(model, data_loader, device):
     y_proba = []
 
     with torch.no_grad():
-        for i, (inputs, labels, study_ids) in enumerate(data_loader):
-            # print(f"Predicting batch {i+1}/{len(data_loader)}...")  # Debug statement
-            # logging.info(f"Predicting batch {i+1}/{len(data_loader)}")
-            inputs = inputs.to(device)
+        for i in range(len(val_images)):
+            inputs, labels = val_images[i].to(device), val_labels[i].to(device)
             outputs = model(inputs)
-
             output = outputs.view(-1)
             probs = torch.sigmoid(output).detach().cpu().numpy()
             y_proba.extend(probs)
-
-            batch_predictions.extend((probs > 0.5).astype(int).tolist())
-            batch_labels.extend(labels.tolist())
-
-            # Process predictions by study_id
-            for prediction, probability, label, study_id in zip(batch_predictions, probs, batch_labels, study_ids):
+            batch_predictions.extend((probs > 0.5)
+                                     .astype(int)
+                                     .tolist()
+                                     )
+            batch_labels.extend(labels
+                                .tolist()
+                                )
+            for prediction, probability, label, study_id in zip(batch_predictions,
+                                                                probs,
+                                                                batch_labels,
+                                                                study_ids):
                 if study_id not in study_summary:
-                    study_summary[study_id] = {'predictions': [], 'probs': [], 'labels': []}
+                    study_summary[study_id] = {'predictions': [],
+                                               'probs': [],
+                                               'labels': []
+                                               }
                 study_summary[study_id]['predictions'].append(prediction)
                 study_summary[study_id]['probs'].append(probability)
                 study_summary[study_id]['labels'].append(label)
-
-            # Clear memory if needed
-            # del inputs, outputs, labels, study_ids
-            # torch.cuda.empty_cache()
-
-        # Calculate patient-level predictions
         patient_predictions = []
         patient_probabilities = []
         patient_labels = []
@@ -441,119 +409,115 @@ def predict(model, data_loader, device):
             mode_prediction, _ = stats.mode(summaries['predictions'])
             mean_probability = np.mean(summaries['probs'])
             mode_label, _ = stats.mode(summaries['labels'])
-
             patient_predictions.append(mode_prediction[0])
             patient_probabilities.append(mean_probability)
             patient_labels.append(mode_label[0])
 
-        print("Prediction complete.")  # Debug statement
-        # logging.info("Prediction complete")
-        return batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probabilities
+    print("[{time}][INFO]:\tPrediction complete"
+          .format(time=datetime.now().strftime("%H:%M:%S")
+                  )
+          )
+
+    return batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probabilities
 
 
 def objective(trial):
-    print(f"Starting trial {trial.number}...")  # Debug statement
-
-    # Initialize Weights & Biases run
+    print("[{time}][INFO]:\tStarting trial: {trialnum}"
+          .format(time=datetime.now().strftime("%H:%M:%S"),
+                  trialnum=trial.number
+                  )
+          )
     run = wandb.init(project=parameters['wdb_name'], config={})
-
-    # Save the script being run to Weights & Biases
     wandb.save(parameters['wdb_save'])
-
     config = run.config
-    trial_lr = trial.suggest_categorical('lr', parameters['tl_lr'])
-    trial_batch_norm = trial.suggest_categorical('batch_norm', parameters['tl_bn'])
-    trial_dropout_rate = trial.suggest_categorical('dropout_rate', parameters['tl_dr'])
+    trial_lr = trial.suggest_categorical('lr',
+                                         parameters['tl_lr']
+                                         )
+    trial_batch_norm = trial.suggest_categorical('batch_norm',
+                                                 parameters['tl_bn']
+                                                 )
+    trial_dropout_rate = trial.suggest_categorical('dropout_rate',
+                                                   parameters['tl_dr']
+                                                   )
 
-    # Configuration setup
     run.config.update({
         "lr": trial_lr,
-        "batch_size": trial.suggest_categorical('batch_size', parameters['tl_bs']),
+        "batch_size": trial.suggest_categorical('batch_size',
+                                                parameters['tl_bs']
+                                                ),
         "num_epochs": parameters['num_e'],
-        "weight_decay": trial.suggest_float('weight_decay', parameters['tl_wd_min'], parameters['tl_wd_max'], log=True),
+        "weight_decay": trial.suggest_float('weight_decay',
+                                            parameters['tl_wd_min'],
+                                            parameters['tl_wd_max'],
+                                            log=True
+                                            ),
         "step_size": 5,
-        "gamma": trial.suggest_float('gamma', parameters['tl_ga_min'], parameters['tl_ga_max'],step=parameters['tl_ga_tp']),
+        "gamma": trial.suggest_float('gamma',
+                                     parameters['tl_ga_min'],
+                                     parameters['tl_ga_max'],
+                                     step=parameters['tl_ga_tp']
+                                     ),
         "batch_norm": trial_batch_norm,
         "dropout_rate": trial_dropout_rate
     }, allow_val_change=True)
 
-    # logging.info("Config setup:\n"
-    #             f"lr: {trail_lr}\n"
-    #             f"batch_size: {trail.suggest_categorial('batch_size', [256])}\n"
-    #             f"num_epochs: {parameters['num_e']}\n"
-    #             f"weight_decay: {trail.suggest_float('weight_decay', 1e-5, 1e-1, log=True)}\n"
-    #             f"step_size: 5\n"
-    #             f"gamma: {trail.suggest_float('gamma', 0.1, 0.9, step=0.1)}\n"
-    #             f"batch_norm: {trail_batch_norm}\n"
-    #             f"dropout_rate: {trail_dropout_rate}\n"
-    #             )
-
-    # Set multiprocessing start method
     mp.set_start_method('spawn', force=True)
-
-    # Create DataLoaders
-    train_data_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True,num_workers=parameters['dl_work'], pin_memory=True)
-    val_data_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False,num_workers=parameters['dl_work'], pin_memory=True)
-
-    # Initialize the model
-    model, model_name = create_model(config["batch_norm"], config["dropout_rate"])
-    run.config.update({"model_name": model_name}, allow_val_change=True)
-
-    # Move model to the device (CPU/GPU)
+    train_data_loader = DataLoader(train_dataset,
+                                   batch_size=config.batch_size,
+                                   shuffle=True,
+                                   num_workers=parameters['dl_work'],
+                                   pin_memory=True
+                                   )
+    val_data_loader = DataLoader(val_dataset,
+                                 batch_size=config.batch_size,
+                                 shuffle=False,
+                                 num_workers=parameters['dl_work'],
+                                 pin_memory=True
+                                 )
+    model, model_name = create_model(config["batch_norm"],
+                                     config["dropout_rate"]
+                                     )
+    run.config.update({"model_name": model_name},
+                      allow_val_change=True
+                      )
     model.to(device)
-
-    # Initialize optimizer and scheduler
     optimizer = optim.Adam(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=config.step_size, gamma=config.gamma)
     scaler = GradScaler()
-
-    # Initialize best validation loss and balanced accuracy for early stopping
     best_val_loss = float('inf')
     best_bal_acc = float('-inf')
     early_stop_counter = parameters['es_count']
     early_stop_limit = parameters['es_limit']
 
-    for i, (images, labels, study_ids) in enumerate(train_data_loader):
-        train_images, train_labels = images.to(device), labels.to(device)
-
-    for i, (images, labels, study_ids) in enumerate(train_data_loader):
-        val_images, val_labels = images.to(device), labels.to(device)
-
-    ## FIND SPOT FOR
-    #     torch.cuda.empty_cache()
-
-    # Training and validation loop
-    # logging.info("Start training")
     for epoch in range(config["num_epochs"]):
-        print(f"Epoch {epoch + 1} - Start training")  # Debug statement
-        # logging.debug(f"Epoch {epoch + 1} - Start training"")
+        print("[{time}][INFO]:\tEpoch {eh1} - Start training"
+              .format(time=datetime.now().strftime("%H:%M:%S"),
+                      eh1=epoch + 1)
+              )
         with profiler.profile(record_shapes=True) as proftrain:
-            training_loss, training_metrics, train_patient_metrics = train(model, train_data_loader, train_images,train_labels, optimizer, scheduler, device,scaler)
-        # log = proftrain.key_averages().table(sort_by="self_cpu_time_total", row_limit=10)
-        print("[INFO TRAIN]:\n\n", proftrain.key_averages().table(sort_by="self_cpu_time_total", row_limit=15))
-        print(f"Epoch {epoch + 1} - Training Loss: {training_loss:.4f}")  # Debug statement
-        # logging.info(f"[INFO TRAIN]:\n{log}")
-        # logging.debug(f"Epoch {epoch + 1} - Training Loss: {training_loss:.4f}")
-
-        # Log training metrics
+            training_loss, training_metrics, train_patient_metrics = train(model, train_data_loader, optimizer,
+                                                                           scheduler, device, scaler)
+        print("[{time}][INFO TRAIN]:\n\n"
+              .format(time=datetime.now().strftime("%H:%M:%S")
+                      ),
+              proftrain.key_averages().table(sort_by="self_cpu_time_total",
+                                             row_limit=15
+                                             )
+              )
+        print(f"[INFO]:\tEpoch {epoch + 1} - Training Loss: {training_loss:.4f}")
         log_metrics(training_metrics, 'train', 'img', training_loss)
         log_metrics(train_patient_metrics, 'train', 'ptnt', None)
-
-        print(f"Epoch {epoch + 1} - Start validation")  # Debug statement
-        # logging.debug(f"Epoch {epoch + 1} - Start validation")
+        print("[{time}][INFO]:\tEpoch {eh1} - Start validation"
+              .format(time=datetime.now().strftime("%H:%M:%S"),
+                      eh1=epoch + 1
+                      )
+              )
         with profiler.profile(record_shapes=True) as profvald:
-            validation_loss, validation_metrics = validate(model, val_images, val_labels, val_data_loader, device)
-        # log = profvald.key_averages().table(sort_by="self_cpu_time_total", row_limit=10)
+            validation_loss, validation_metrics = validate(model, val_data_loader, device)
         print("[INFO VALD]:\n\n", profvald.key_averages().table(sort_by="self_cpu_time_total", row_limit=15))
-        print(f"Epoch {epoch + 1} - Validation Loss: {validation_loss:.4f}")  # Debug statement
-        # logging.info(f"[INFO VALD]:\n{log}")
-        # logging.debug(f"Epoch {epoch + 1} - Validation Loss: {validation_loss:.4f}")
-
-        # Checkpointing and early stopping
-        # bal_acc = validation_metrics['balanced_accuracy']
+        print(f"[INFO]:\tEpoch {epoch + 1} - Validation Loss: {validation_loss:.4f}")
         bal_acc = validation_metrics['bal_acc']
         is_best_loss = validation_loss < best_val_loss
-
         if is_best_loss:
             best_val_loss = validation_loss
             early_stop_counter = 0
@@ -562,15 +526,14 @@ def objective(trial):
                 ml_params = [f"{key}={value}" for key, value in config.items() if key not in ['project']]
                 model_csv.write(f"{run.name},loss,epoch={epoch + 1},{','.join(ml_params)}\n")
             model_csv.close()
-
         else:
             early_stop_counter += 1
             if early_stop_counter >= early_stop_limit:
-                # logging.error("Early stopping triggered")
-                print('Early stopping triggered')  # Debug statement
-                print("\n\n\n")
+                print('[{time}][INFO]:\tEarly stopping triggered\n\n\n'
+                      .format(time=datetime.now().strftime("%H:%M:%S")
+                              )
+                      )
                 break
-
         is_best_bal_acc = bal_acc > best_bal_acc
         if is_best_bal_acc:
             best_bal_acc = bal_acc
@@ -580,101 +543,125 @@ def objective(trial):
                 model_csv.write(f"{run.name},bal_acc,epoch={epoch + 1},{','.join(ml_params)}\n")
             model_csv.close()
 
-        # Log validation metrics
         log_metrics(validation_metrics, 'val', 'img', validation_loss)
-        print(f"Epoch {epoch + 1} - Validation Metrics: Acc: {validation_metrics['acc']:.4f}, F1: {validation_metrics['f1']:.4f}, Bal Acc: {bal_acc:.4f}")  # Debug statement
-        # logging.debug(f"Epoch {epoch + 1} - Validation Metrics: Acc: {validation_metrics['acc']:.4f}, F1: {validation_metrics['f1']:.4f}, Bal Acc: {bal_acc:.4f}")
-
-        print(f"Epoch {epoch + 1} - Start prediction")  # Debug statement
-        # logging.debug(f"Epoch {epoch + 1} - Start prediction")
-        with profiler.profile(record_shapes=True) as profpredict:
-            batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probs = predict(model, val_data_loader, device)
-        print("[INFO PREDICTION]:\n\n", profpredict.key_averages().table(sort_by="self_cpu_time_total", row_limit=15))
-        print(f"Epoch {epoch + 1} - Prediction done")  # Debug statement
-        # logging.debug(f"Epoch {epoch + 1} - Prediction done")
-
-        patient_metrics = calculate_metrics(patient_labels, patient_predictions, patient_probs)
+        print(f"Epoch {epoch + 1} -",
+              "Validation Metrics: Acc: {validation_metrics['acc']:.4f},",
+              "F1: {validation_metrics['f1']:.4f},",
+              "Bal Acc: {bal_acc:.4f}")
+        print("[{time}][INFO]:\tEpoch {eh1} - Start prediction"
+              .format(time=datetime.now().strftime("%H:%M:%S"),
+                      eh1=epoch + 1
+                      )
+              )
+        batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probs = predict(model,
+                                                                                                               val_data_loader,
+                                                                                                               device
+                                                                                                               )
+        print("[{time}][INFO]:\tEpoch {eh1} - Prediction done"
+              .format(time=datetime.now().strftime("%H:%M:%S"),
+                      eh1=epoch + 1
+                      )
+              )
+        patient_metrics = calculate_metrics(patient_labels,
+                                            patient_predictions,
+                                            patient_probs
+                                            )
         log_metrics(patient_metrics, 'val', 'ptnt', None)
-        print(
-            f"Epoch {epoch + 1} - Patient-Level Metrics: Acc: {patient_metrics['acc']:.4f}, F1: {patient_metrics['f1']:.4f}, Bal Acc: {patient_metrics['bal_acc']:.4f}")  # Debug statement
-        # logging.debug(f"Epoch {epoch + 1} - Patient-Level Metrics: Acc: {patient_metrics['acc']:.4f}, F1: {patient_metrics['f1']:.4f}, Bal Acc: {patient_metrics['bal_acc']:.4f}")
+        print(f"Epoch {epoch + 1} -",
+              "Patient-Level Metrics: Acc: {patient_metrics['acc']:.4f},",
+              "F1: {patient_metrics['f1']:.4f},",
+              "Bal Acc: {patient_metrics['bal_acc']:.4f}"
+              )
 
-        # Pruning
         if trial.should_prune():
             raise optuna.exceptions.TrialPruned()
 
     run.finish()
-    # Add del statement if necessary
     torch.cuda.empty_cache()
-    print(f"Trial {trial.number} complete.")  # Debug statement
-    # logging.debug(f"Trial {trial.number} complete.")
+    print("[{time}][INFO]:\tTrial {tnum} complete"
+          .format(time=datetime.now().strftime("%H:%M:%S"),
+                  tnum=trial.number)
+          )
 
     return best_val_loss
 
 
 def main():
-    # Set the multiprocessing start method to 'spawn' for Windows compatibility
     mp.set_start_method('spawn', force=True)
-
-    # Initialize Weights & Biases (if you're using it)
     wandb.init(project=parameters['wdb_name'])
-
-    # Create the Optuna study and start the optimization process
     study = optuna.create_study(direction='minimize')
     study.optimize(objective, n_trials=parameters['num_t'])
 
 
 if __name__ == '__main__':
-    # Setup logger
-    # logfile = r"{rd}\{dt}_logfile.log".format(rd=parameters['root_dir'], dt=datetime.now().strftime("%y%m%d_%H-%M))
-    # if os.path.isfile(logfile):
-    #    os.remove(logfile)
-    # logging.basicConfig(level=parameters['log_lvl'],
-    #                    format="%(asctime)s - %(levelname)-8s - %(message)s",
-    #                    handlers=[
-    #                        logging.FileHandler(logfile),
-    #                        logging.StreamHandler()
-    #                        ]
-    #                    )
-
-    # logging.info("Starting predictions for:\t{wn}".format(wn=parameters['wdb_name']))
-
     parameters = load_parameters(param_path)
     root_dir = parameters['root_dir']
     xlsx_dir = parameters['xlsx_dir']
-    transform = transforms.Compose([
-        custom_transform
-        ])
-    train_dataset = CustomImageDataset(os.path.join(parameters['root_dir'], parameters['train_dir']),parameters['xlsx_dir'], transform=transform)
-    val_dataset = CustomImageDataset(os.path.join(parameters['root_dir'], parameters['val_dir']),parameters['xlsx_dir'], transform=transform)
-    print("Training index processing:")
+    transform = transforms.Compose([custom_transform])
+    train_dataset = CustomImageDataset(os.path.join(parameters['root_dir'], parameters['train_dir']),
+                                       parameters['xlsx_dir'], transform=transform)
+    val_dataset = CustomImageDataset(os.path.join(parameters['root_dir'], parameters['val_dir']),
+                                     parameters['xlsx_dir'], transform=transform)
     train_class_counts = get_class_counts(train_dataset)
-    print("\nValidation index processing:")
     val_class_counts = get_class_counts(val_dataset)
-    print("\nTraining set class counts:")
+    train_images = []
+    train_labels = []
+    val_images = []
+    val_labels = []
+    print("[{time}][INFO]:\tLoading training images"
+          .format(time=datetime.now().strftime("%H:%M:%S")
+                  )
+          )
+    train_images, train_labels, study_ids = load_img_label(train_dataset)
+    print("[{time}][INFO]:\tloaded training images"
+          .format(time=datetime.now().strftime("%H:%M:%S")
+                  )
+          )
+    print("[{time}][INFO]:\tLoading validation images"
+          .format(time=datetime.now().strftime("%H:%M:%S")
+                  )
+          )
+    val_images, val_labels, study_ids = load_img_label(val_dataset)
+    print("[{time}][INFO]:\tLoaded validation images"
+          .format(time=datetime.now().strftime("%H:%M:%S")
+                  )
+          )
+    print("[{time}][INFO]:\tTraining set class counts:"
+          .format(time=datetime.now().strftime("%H:%M:%S")
+                  )
+          )
+
     for label, count in train_class_counts.items():
         print(f"Class {label}: {count} images")
-    #    logging.info(f"Training set class counts {label}: {count} images")
 
-    print("\nValidation set class counts:")
+    print("\n[{time}][INFO]:\tValidation set class counts:"
+          .format(time=datetime.now().strftime("%H:%M:%S")
+                  )
+          )
+
     for label, count in val_class_counts.items():
         print(f"Class {label}: {count} images")
-    #    logging.info(f"Validation set class counts {label}: {count} images")
 
-    # Checking for GPU availability
-    print("\nChecking for GPU availability...")
-    # logging.info("Checking for GPU availability")
+    print("[{time}][INFO]:\tChecking for GPU availability"
+          .format(time=datetime.now().strftime("%H:%M:%S")
+                  )
+          )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print("Using device:", device)
-    # logging.info(f"Using device: {device}")
+    print("[{time}][INFO]:\tUsing device:"
+          .format(time=datetime.now().strftime("%H:%M:%S")
+                  ),
+          device
+          )
 
     if not os.path.exists('Best models'):
         os.makedirs('Best models')
 
-    # logging.info("Starting main")
-    print("\nStarting main...")
+    print("[{time}][INFO]:\tStarting main"
+          .format(time=datetime.now().strftime("%H:%M:%S")
+                  )
+          )
     main()
-    # log = profmain.key_averages().table(sort_by="self_cpu_time_total", row_limit=10)
-    # logging.info(f"Profiler info main:\n{log}")
-    print("Main complete.")
-
+    print("[{time}][INFO]:\tMain complete"
+          .format(time=datetime.now().strftime("%H:%M:%S")
+                  )
+          )
