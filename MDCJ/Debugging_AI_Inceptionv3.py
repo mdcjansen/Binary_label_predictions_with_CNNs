@@ -27,59 +27,61 @@ from torchvision.models import inception_v3
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.20"
+__version__ = "1.21"
 __date__ = "15/12/2023"
 
 # Parameter file path
 param_path = r"D:\path\to\parameter\file.csv"
 
 
-class CustomImageDataset(Dataset):
-    def __init__(self, root_dir, xlsx_dir, transform=None):
-        self.root_dir = root_dir
-        self.transform = transform
-        self.df_labels = pd.read_excel(xlsx_dir)
+def __init__(self, root_dir, xlsx_dir, transform=None):
+    self.root_dir = root_dir
+    self.transform = transform
+    self.df_labels = pd.read_excel(xlsx_dir)
 
-        self.all_data = self._preloading()
+    self.all_data = self._preloading()
 
-    def _preloading(self):
-        all_images = []
-        all_labels = []
 
-        for subdir, _, files in os.walk(self.root_dir):
-            for file in files:
-                if file.endswith(".jpg"):
-                    img_path = os.path.join(subdir, file)
-                    segments = file.split("_")
+def _preloading(self):
+    all_images = []
+    all_labels = []
 
-                    if len(segments) <= 1:
-                        raise ValueError
+    for subdir, _, files in os.walk(self.root_dir):
+        for file in files:
+            if file.endswith(".jpg"):
+                img_path = os.path.join(subdir, file)
+                segments = file.split("_")
 
-                    study_id = segments[1]
-                    label_entries = self.df_labels[self.df_labels['study_id'] == int(study_id)]["label"].values
+                if len(segments) <= 1:
+                    raise ValueError
 
-                    if len(label_entries) == 0:
-                        label = None
-                    else:
-                        label = label_entries[0]
+                study_id = segments[1]
+                label_entries = self.df_labels[self.df_labels['study_id'] == int(study_id)]["label"].values
 
-                    all_images.append(img_path)
-                    all_labels.append(label)
+                if len(label_entries) == 0:
+                    label = None
+                else:
+                    label = label_entries[0]
 
-        return list(zip(all_images, all_labels))
+                all_images.append(img_path)
+                all_labels.append(label)
 
-    def __len__(self):
-        return len(self.all_data)
+    return list(zip(all_images, all_labels))
 
-    def __getitem__(self, index):
-        img_path, label = self.all_data[index]
 
-        image = Image.open(img_path).convert('RGB')
+def __len__(self):
+    return len(self.all_data)
 
-        if self.transform:
-            image = self.transform(image)
 
-        return image, label, os.path.basename(img_path)
+def __getitem__(self, index):
+    img_path, label = self.all_data[index]
+
+    image = Image.open(img_path).convert('RGB')
+
+    if self.transform:
+        image = self.transform(image)
+
+    return image, label, os.path.basename(img_path)
 
 
 class CustomHead(nn.Module):
@@ -119,7 +121,7 @@ def load_parameters(param_path):
         'val_dir': ''.join(input_param['val_dirname']),
         'wdb_name': ''.join(input_param['wandb_name']),
         'wdb_save': ''.join(input_param['wandb_save']),
-        'log_lvl': ''.join(input_param['log_level']),
+        'ml_csv': ''.join(input_param['model_param_csv']),
         'dl_work': int(''.join(input_param['dataload_workers'])),
         'a_steps': int(''.join(input_param['accumulation_steps'])),
         'num_e': int(''.join(input_param['num_epochs'])),
@@ -158,18 +160,20 @@ def load_parameters(param_path):
 # =============================================================================
 
 
-def load_img_label(dataset):
-    images_len = []
-    labels_len = []
-    ids_len = []
-    for i, (image, label, study_id) in enumerate(dataset):
-        img_tensor = image
-        label_tensor = label
-        study_id_tensor = study_id
-        images_len.append(image)
-        labels_len.append(label)
-        ids_len.append(study_id)
-    return img_tensor, label_tensor, study_id_tensor
+# =============================================================================
+# def load_img_label(dataset):
+#     images_len = []
+#     labels_len = []
+#     ids_len = []
+#     for i, (image, label, study_id) in enumerate(dataset):
+#         img_tensor = image
+#         label_tensor = label
+#         study_id_tensor = study_id
+#         images_len.append(image)
+#         labels_len.append(label)
+#         ids_len.append(study_id)
+#     return img_tensor, label_tensor, study_id_tensor
+# =============================================================================
 
 
 def get_class_counts(dataset):
@@ -216,11 +220,6 @@ def calculate_metrics(y_true, y_pred, y_proba):
     except Exception as e:
         print(f"Error computing confusion matrix: {e}")
         metrics['cm'] = None
-
-    # =============================================================================
-    #     print("\n")
-    #     print("\n\nMETRICS BELOW CALC METRICS\n:", "{" + "\n".join("{!r}: {!r},".format(k, v) for k, v in metrics.items()) + "}\n")
-    # =============================================================================
 
     return metrics
 
@@ -269,8 +268,6 @@ def train(model, train_data_loader, optimizer, scheduler, device, scaler):
     optimizer.zero_grad()
 
     for i, (images, labels, study_ids) in enumerate(train_data_loader):
-        # print(f"Training batch {i+1}/{len(train_data_loader)}...")
-        # logging.info(f"Training batch {i+1}/{len(train_data_loader)}")
         images, labels = images.to(device), labels.to(device)
         with autocast():
             outputs, aux_outputs = model(images)
@@ -297,17 +294,13 @@ def train(model, train_data_loader, optimizer, scheduler, device, scaler):
     _, _, train_patient_predictions, train_patient_labels, _, train_patient_probs = predict(model, train_data_loader,
                                                                                             device)
     train_patient_metrics = calculate_metrics(train_patient_labels, train_patient_predictions, train_patient_probs)
-    # =============================================================================
-    #     print("Training complete.")
-    # =============================================================================
 
-    del all_predictions, all_labels, y_logits  # Clearing memory
+    del all_predictions, all_labels, y_logits
+
     return total_loss / len(train_data_loader.dataset), metrics, train_patient_metrics
 
 
 def validate(model, val_data_loader, device):
-    # print("Starting validation...")
-    # logging.info("Starting validation")
     model.eval()
     total_loss = 0
     all_predictions = []
@@ -316,32 +309,26 @@ def validate(model, val_data_loader, device):
 
     with torch.no_grad():
         for i, (images, labels, study_ids) in enumerate(val_data_loader):
-            # print(f"Validating batch {i+1}/{len(val_data_loader)}...")
             images, labels = images.to(device), labels.to(device)
             with autocast():
-                outputs = model(images)  # Use outputs directly
+                outputs = model(images)
                 loss = F.binary_cross_entropy_with_logits(outputs.squeeze(), labels.float())
 
             total_loss += loss.item() * images.size(0)
             all_predictions.extend((torch.sigmoid(outputs.squeeze()) > 0.5).long().tolist())
             all_labels.extend(labels.tolist())
             y_proba.extend(torch.sigmoid(outputs.squeeze().detach().cpu().float()).numpy())
+
             del images, labels
             torch.cuda.empty_cache()
 
         metrics = calculate_metrics(all_labels, all_predictions, y_proba)
-        # =============================================================================
-        #         print("Validation complete.")
-        # =============================================================================
         del all_predictions, all_labels, y_proba
 
-        return total_loss / len(val_data_loader.dataset), metrics
+    return total_loss / len(val_data_loader.dataset), metrics
 
 
 def predict(model, data_loader, device):
-    # =============================================================================
-    #     print("Starting prediction...")
-    # =============================================================================
     model.eval()
     model = model.to(device)
     batch_predictions = []
@@ -372,23 +359,13 @@ def predict(model, data_loader, device):
         patient_predictions = []
         patient_probabilities = []
         patient_labels = []
+
         for study_id, summaries in study_summary.items():
             patient_predictions.append(stats.mode(study_summary[study_id]['predictions'], keepdims=True)[0][0])
             patient_probabilities.append(np.mean(study_summary[study_id]['probs']))
             patient_labels.append(stats.mode(study_summary[study_id]['labels'], keepdims=True)[0][0])
-        # =============================================================================
-        #             mode_prediction, _ = stats.mode(summaries['predictions'])
-        #             mean_probability = np.mean(summaries['probs'])
-        #             mode_label, _ = stats.mode(summaries['labels'])
-        #             patient_predictions.append(mode_prediction[0])
-        #             patient_probabilities.append(mean_probability)
-        #             patient_labels.append(mode_label[0])
-        # =============================================================================
 
-        # =============================================================================
-        #         print("Prediction complete.")
-        # =============================================================================
-        return batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probabilities
+    return batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probabilities
 
 
 def objective(trial):
@@ -419,7 +396,7 @@ def objective(trial):
                                    pin_memory=True)
     val_data_loader = DataLoader(val_dataset,
                                  batch_size=config.batch_size,
-                                 shuffle=False,
+                                 shuffle=True,
                                  num_workers=parameters['dl_work'],
                                  pin_memory=True)
 
@@ -449,7 +426,7 @@ def objective(trial):
         log_metrics(training_metrics, 'train', 'img', training_loss)
         log_metrics(train_patient_metrics, 'train', 'ptnt', None)
         print(
-            f"Epoch {epoch + 1} - Training Metrics:\t\tLoss: {training_loss:.4f}, Acc: {training_metrics['acc']:.4f}, F1: {training_metrics['f1']:.4f}, {training_metrics['bal_acc']:.4f}")
+            f"Epoch {epoch + 1} - Training Metrics:\tLoss: {training_loss:.4f}, Acc: {training_metrics['acc']:.4f}, F1: {training_metrics['f1']:.4f}, {training_metrics['bal_acc']:.4f}")
 
         # =============================================================================
         #         with profiler.profile(record_shapes=True) as profvald:
@@ -466,7 +443,7 @@ def objective(trial):
             best_val_loss = validation_loss
             early_stop_counter = 0
             torch.save(model.state_dict(), generate_filename('best_model', run.name, config, 'loss', epoch))
-            with open('model_parameters.csv', 'a+') as model_csv:
+            with open(parameters['ml_csv'], 'a+') as model_csv:
                 ml_params = [f"{key}={value}" for key, value in config.items() if key not in ['project']]
                 model_csv.write(f"{run.name},loss,epoch={epoch + 1},{','.join(ml_params)}\n")
             model_csv.close()
@@ -474,7 +451,6 @@ def objective(trial):
         else:
             early_stop_counter += 1
             if early_stop_counter >= early_stop_limit:
-                # logging.error("Early stopping triggered")
                 print('Early stopping triggered')  # Debug statement
                 print("\n\n\n")
                 break
