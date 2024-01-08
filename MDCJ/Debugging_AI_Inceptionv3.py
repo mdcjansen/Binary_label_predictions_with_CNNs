@@ -27,8 +27,8 @@ from torchvision.models import inception_v3
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.16"
-__date__ = "06/12/2023"
+__version__ = "1.17"
+__date__ = "07/12/2023"
 
 # Parameter file path
 param_path = r"D:\path\to\parameter\file.csv"
