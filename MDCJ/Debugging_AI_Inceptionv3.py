@@ -156,19 +156,7 @@ def load_img_label(dataset):
         images_len.append(image)
         labels_len.append(label)
         ids_len.append(study_id)
-    # =============================================================================
-    #         if len(images_len) != 100:
-    #             images_len.append(image)
-    #             labels_len.append(label)
-    #             ids_len.append(study_id)
-    #             print(f"Attained {len(images_len)} labels", end='\r')
-    #         else:
-    #             print("")
-    #             print(images_len)
-    #             import sys
-    #             sys.exit()
-    #             return img_tensor, label_tensor, study_id_tensor
-    # =============================================================================
+
     return img_tensor, label_tensor, study_id_tensor
 
 
