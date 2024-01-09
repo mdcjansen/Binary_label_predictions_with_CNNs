@@ -51,8 +51,8 @@ def main():
 
 
 if __name__ == '__main__':
-    input_dir = r"D:\MDCJ\5_oversampled_20X_fully_filtered"
-    output_dir = r"D:\MDCJ\5-5_oversampled_colour_augmented"
+    input_dir = r"\\path\to\input\directory"
+    output_dir = r"\\path\to\ouput\directory"
     os.makedirs(output_dir, exist_ok=True)
 
     main()
