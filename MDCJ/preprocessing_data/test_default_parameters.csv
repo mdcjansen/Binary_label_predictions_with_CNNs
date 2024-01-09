@@ -1,0 +1,23 @@
+variable,value
+root_dir,\\store\isilon\archive\EUCRG\Shared folders\Students\2023\Maarten\7-testset
+xlsx_path,\\store\isilon\archive\EUCRG\Shared folders\Students\2023\Maarten\Data_filesBRS_labels_binary 0(1)and1(2) vs 2(3).xlsx
+train_dirname,Train
+val_dirname,Val
+wandb_name,231118_Debugging_w_Inceptionv3_MDCJ
+wandb_save,\\store\isilon\archive\EUCRG\Shared folders\Students\2023\Maarten\7-testset
+model_param_csv,231218_inception_debugging
+dataload_workers,3
+accumulation_steps,4
+num_epochs,20
+num_trials,1
+es_counter,0
+es_limit,15
+tl_loss_rate,1e-4;1e-3;1e-2
+tl_batch_norm,True;False
+tl_dropout_rate,0;0.1;0.2;0.5
+tl_batch_size,256
+tl_weight_decay_min,1e-5
+tl_weight_decay_max,1e-1
+tl_gamma_min,0.1
+tl_gamma_max,0.9
+tl_gamma_step,0.1
