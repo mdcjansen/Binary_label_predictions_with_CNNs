@@ -5,13 +5,9 @@ import numpy as np
 import optuna
 import os
 import pandas as pd
-# =============================================================================
-# import random
-# =============================================================================
+import random
 import torch
-# =============================================================================
-# import torch.autograd.profiler as profiler
-# =============================================================================
+import torch.autograd.profiler as profiler
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.multiprocessing as mp
@@ -22,8 +18,7 @@ import wandb
 from collections import defaultdict
 from PIL import Image
 from scipy import stats
-from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, precision_score, recall_score, roc_curve, \
-    auc, confusion_matrix
+from sklearn.metrics import roc_auc_score, accuracy_score, balanced_accuracy_score, f1_score, precision_score, recall_score, roc_curve, auc, confusion_matrix
 from torch.cuda.amp import autocast, GradScaler
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
@@ -32,11 +27,11 @@ from torchvision.models import inception_v3
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.9"
-__date__ = "19/12/2023"
+__version__ = "1.23"
+__date__ = "11/01/2023"
 
 # Parameter file path
-param_path = r"D:\path\to\parameter\csv"
+param_path = r"D:\path\to\parameter\file.csv"
 
 
 class CustomImageDataset(Dataset):
@@ -44,7 +39,6 @@ class CustomImageDataset(Dataset):
         self.root_dir = root_dir
         self.transform = transform
         self.df_labels = pd.read_excel(xlsx_dir)
-
         self.all_data = self._preloading()
 
     def _preloading(self):
@@ -78,7 +72,6 @@ class CustomImageDataset(Dataset):
 
     def __getitem__(self, index):
         img_path, label = self.all_data[index]
-
         image = Image.open(img_path).convert('RGB')
 
         if self.transform:
@@ -125,7 +118,7 @@ def load_parameters(param_path):
         'wdb_name': ''.join(input_param['wandb_name']),
         'wdb_save': ''.join(input_param['wandb_save']),
         'ml_csv': ''.join(input_param['model_param_csv']),
-        'dl_work': int(''.join(input_param['dataload_workers'])),
+        'dl_work':  int(''.join(input_param['dataload_workers'])),
         'a_steps': int(''.join(input_param['accumulation_steps'])),
         'num_e': int(''.join(input_param['num_epochs'])),
         'num_t': int(''.join(input_param['num_trials'])),
@@ -145,22 +138,20 @@ def load_parameters(param_path):
     return input_variables
 
 
-# =============================================================================
-# def custom_transform(image):
-#     rd_colour_change = random.random() < 0.3
-#
-#     if rd_colour_change:
-#         brightness = random.uniform(0.0 , 0.25)
-#         contrast =  random.uniform(0.0 , 0.2)
-#         saturation =  random.uniform(0.0 , 0.4)
-#         hue =  random.uniform(0.0 , 0.5)
-#         image = transforms.functional.adjust_brightness (image, brightness)
-#         image = transforms.functional.adjust_contrast(image, contrast)
-#         image = transforms.functional.adjust_saturation(image, saturation)
-#         image = transforms.functional.adjust_hue(image, hue)
-#
-#     return transforms.functional.to_tensor(image)
-# =============================================================================
+def custom_transform(image):
+    rd_colour_change = random.random() < 0.3
+
+    if rd_colour_change:
+        brightness = random.uniform(0.0, 0.25)
+        contrast = random.uniform(0.0, 0.2)
+        saturation = random.uniform(0.0, 0.4)
+        hue = random.uniform(0.0, 0.5)
+        image = transforms.functional.adjust_brightness(image, brightness)
+        image = transforms.functional.adjust_contrast(image, contrast)
+        image = transforms.functional.adjust_saturation(image, saturation)
+        image = transforms.functional.adjust_hue(image, hue)
+
+    return transforms.functional.to_tensor(image)
 
 
 def load_img_label(dataset):
@@ -174,6 +165,7 @@ def load_img_label(dataset):
         images_len.append(image)
         labels_len.append(label)
         ids_len.append(study_id)
+
     return img_tensor, label_tensor, study_id_tensor
 
 
@@ -187,6 +179,7 @@ def get_class_counts(dataset):
                 print(f"Last index processed: {idx}")
         except Exception as e:
             print(f"Error processing image at index {idx}: {e}")
+
     return class_counts
 
 
@@ -265,7 +258,6 @@ def train(model, train_data_loader, optimizer, scheduler, device, scaler):
     all_predictions = []
     all_labels = []
     y_logits = []
-
     optimizer.zero_grad()
 
     for i, (images, labels, study_ids) in enumerate(train_data_loader):
@@ -275,15 +267,12 @@ def train(model, train_data_loader, optimizer, scheduler, device, scaler):
             loss1 = F.binary_cross_entropy_with_logits(outputs.squeeze(), labels.float())
             loss2 = F.binary_cross_entropy_with_logits(aux_outputs.squeeze(), labels.float())
             loss = loss1 + 0.4 * loss2
-
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
         scaler.step(optimizer)
         scaler.update()
-
         optimizer.zero_grad()
-
         all_predictions.extend((torch.sigmoid(outputs.squeeze()) > 0.5).long().tolist())
         all_labels.extend(labels.tolist())
         y_logits.extend(outputs.squeeze().detach().cpu().numpy())
@@ -313,17 +302,15 @@ def validate(model, val_data_loader, device):
             with autocast():
                 outputs = model(images)
                 loss = F.binary_cross_entropy_with_logits(outputs.squeeze(), labels.float())
-
             total_loss += loss.item() * images.size(0)
             all_predictions.extend((torch.sigmoid(outputs.squeeze()) > 0.5).long().tolist())
             all_labels.extend(labels.tolist())
             y_proba.extend(torch.sigmoid(outputs.squeeze().detach().cpu().float()).numpy())
             del images, labels
             torch.cuda.empty_cache()
-
         metrics = calculate_metrics(all_labels, all_predictions, y_proba)
-        del all_predictions, all_labels, y_proba
 
+        del all_predictions, all_labels, y_proba
         return total_loss / len(val_data_loader.dataset), metrics
 
 
@@ -344,17 +331,14 @@ def predict(model, data_loader, device):
             y_proba.extend(probs)
             batch_predictions.extend((probs > 0.5).astype(int).tolist())
             batch_labels.extend(labels.tolist())
-
             for prediction, probability, label, study_id in zip(batch_predictions, probs, batch_labels, study_ids):
                 if study_id not in study_summary:
                     study_summary[study_id] = {'predictions': [], 'probs': [], 'labels': []}
                 study_summary[study_id]['predictions'].append(prediction)
                 study_summary[study_id]['probs'].append(probability)
                 study_summary[study_id]['labels'].append(label)
-
             del inputs, outputs, labels, study_ids
             torch.cuda.empty_cache()
-
         patient_predictions = []
         patient_probabilities = []
         patient_labels = []
@@ -385,7 +369,8 @@ def objective(trial):
                                      step=parameters['tl_ga_tp']),
         "batch_norm": trial_batch_norm,
         "dropout_rate": trial_dropout_rate
-    }, allow_val_change=True)
+    },
+        allow_val_change=True)
 
     train_data_loader = DataLoader(train_dataset,
                                    batch_size=config.batch_size,
@@ -394,7 +379,7 @@ def objective(trial):
                                    pin_memory=True)
     val_data_loader = DataLoader(val_dataset,
                                  batch_size=config.batch_size,
-                                 shuffle=True,
+                                 shuffle=False,
                                  num_workers=parameters['dl_work'],
                                  pin_memory=True)
 
@@ -411,29 +396,22 @@ def objective(trial):
 
     for epoch in range(config["num_epochs"]):
         print(f"Epoch {epoch + 1} - Started")
-
-        # =============================================================================
-        #         with profiler.profile(record_shapes=True) as proftrain:
-        #             training_loss, training_metrics, train_patient_metrics = train(model, train_data_loader, optimizer, scheduler, device, scaler)
-        #         print("[INFO TRAIN]:\n\n", proftrain.key_averages().table(sort_by="self_cpu_time_total", row_limit=15))
-        # =============================================================================
-
-        training_loss, training_metrics, train_patient_metrics = train(model, train_data_loader, optimizer, scheduler,
-                                                                       device, scaler)
-
+        training_loss, training_metrics, train_patient_metrics = train(model,
+                                                                       train_data_loader,
+                                                                       optimizer,
+                                                                       scheduler,
+                                                                       device,
+                                                                       scaler
+                                                                       )
         log_metrics(training_metrics, 'train', 'img', training_loss)
         log_metrics(train_patient_metrics, 'train', 'ptnt', None)
-        print(
-            f"Epoch {epoch + 1} - Training Metrics:\t\tAcc: {training_metrics['acc']:.4f}, F1: {training_metrics['f1']:.4f}, {training_metrics['bal_acc']:.4f}, Loss: {training_loss:.4f}")
-
-        # =============================================================================
-        #         with profiler.profile(record_shapes=True) as profvald:
-        #             validation_loss, validation_metrics = validate(model, val_data_loader, device)
-        #         print("[INFO VALD]:\n\n", profvald.key_averages().table(sort_by="self_cpu_time_total", row_limit=15))
-        # =============================================================================
-
+        print(f"Epoch {epoch + 1} - Training Metrics:\t\t"
+              f"Acc: {training_metrics['acc']:.4f}, "
+              f"F1: {training_metrics['f1']:.4f}, "
+              f"Bal Acc: {training_metrics['bal_acc']:.4f}, "
+              f"Loss: {training_loss:.4f}"
+              )
         validation_loss, validation_metrics = validate(model, val_data_loader, device)
-
         bal_acc = validation_metrics['bal_acc']
         is_best_loss = validation_loss < best_val_loss
 
@@ -445,7 +423,6 @@ def objective(trial):
                 ml_params = [f"{key}={value}" for key, value in config.items() if key not in ['project']]
                 model_csv.write(f"{run.name},loss,epoch={epoch + 1},{','.join(ml_params)}\n")
             model_csv.close()
-
         else:
             early_stop_counter += 1
             if early_stop_counter >= early_stop_limit:
@@ -463,16 +440,22 @@ def objective(trial):
             model_csv.close()
 
         log_metrics(validation_metrics, 'val', 'img', validation_loss)
-        print(
-            f"Epoch {epoch + 1} - Validation Metrics:\t\tAcc: {validation_metrics['acc']:.4f}, F1: {validation_metrics['f1']:.4f}, Bal Acc: {bal_acc:.4f}, Loss: {validation_loss:.4f}")
-
+        print(f"Epoch {epoch + 1} - Validation Metrics:\t\t"
+              f"Acc: {validation_metrics['acc']:.4f}, "
+              f"F1: {validation_metrics['f1']:.4f}, "
+              f"Bal Acc: {bal_acc:.4f}, "
+              f"Loss: {validation_loss:.4f}"
+              )
         batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probs = predict(model,
                                                                                                                val_data_loader,
                                                                                                                device)
         patient_metrics = calculate_metrics(patient_labels, patient_predictions, patient_probs)
         log_metrics(patient_metrics, 'val', 'ptnt', None)
-        print(
-            f"Epoch {epoch + 1} - Patient-Level Metrics:\tAcc: {patient_metrics['acc']:.4f}, F1: {patient_metrics['f1']:.4f}, Bal Acc: {patient_metrics['bal_acc']:.4f}")
+        print(f"Epoch {epoch + 1} - Patient-Level Metrics:\t"
+              f"Acc: {patient_metrics['acc']:.4f}, "
+              f"F1: {patient_metrics['f1']:.4f}, "
+              f"Bal Acc: {patient_metrics['bal_acc']:.4f}"
+              )
 
         if trial.should_prune():
             raise optuna.exceptions.TrialPruned()
@@ -494,14 +477,10 @@ def main():
 
 if __name__ == '__main__':
     mp.set_start_method('spawn', force=True)
-
     parameters = load_parameters(param_path)
     root_dir = parameters['root_dir']
     xlsx_dir = parameters['xlsx_dir']
-    # =============================================================================
-    #     transform = transforms.Compose([custom_transform])
-    # =============================================================================
-    transform = transforms.Compose([transforms.ToTensor()])
+    transform = transforms.Compose([custom_transform])
 
     train_dataset = CustomImageDataset(os.path.join(parameters['root_dir'],
                                                     parameters['train_dir']),
@@ -516,6 +495,7 @@ if __name__ == '__main__':
     train_class_counts = get_class_counts(train_dataset)
     print("\nValidation index processing:")
     val_class_counts = get_class_counts(val_dataset)
+
     print("\nTraining set class counts:")
     for label, count in train_class_counts.items():
         print(f"Class {label}: {count} images")
