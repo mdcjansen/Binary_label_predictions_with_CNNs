@@ -35,43 +35,6 @@ __date__ = "11/01/2023"
 param_path = r"D:\path\to\parameter\csv"
 
 
-#!/usr/bin/env python3
-
-import csv
-import numpy as np
-import optuna
-import os
-import pandas as pd
-import random
-import torch
-import torch.autograd.profiler as profiler
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.multiprocessing as mp
-import torch.optim as optim
-import torchvision.transforms as transforms
-import wandb
-
-from collections import defaultdict
-from PIL import Image
-from scipy import stats
-from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, precision_score, recall_score, roc_curve, \
-    auc, confusion_matrix
-from torch.cuda.amp import autocast, GradScaler
-from torch.optim import lr_scheduler
-from torch.utils.data import DataLoader
-from torch.utils.data import Dataset
-from torchvision.models import alexnet
-
-# Credentials
-__author__ = "M.D.C. Jansen"
-__version__ = "1.5"
-__date__ = "11/01/2023"
-
-# Parameter file path
-param_path = r"D:\path\to\parameter\csv"
-
-
 class CustomImageDataset(Dataset):
     def __init__(self, root_dir, xlsx_dir, transform=None):
         self.root_dir = root_dir
