@@ -426,7 +426,7 @@ def objective(trial):
         else:
             early_stop_counter += 1
             if early_stop_counter >= early_stop_limit:
-                print('Early stopping triggered')  # Debug statement
+                print('Early stopping triggered')
                 print("\n\n\n")
                 break
 
