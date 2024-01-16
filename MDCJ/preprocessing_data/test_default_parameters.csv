@@ -1,15 +1,15 @@
 variable,value
-root_dir,\\store\isilon\archive\EUCRG\Shared folders\Students\2023\Maarten\7-testset
-xlsx_path,\\store\isilon\archive\EUCRG\Shared folders\Students\2023\Maarten\Data_filesBRS_labels_binary 0(1)and1(2) vs 2(3).xlsx
-train_dirname,Train
-val_dirname,Val
-wandb_name,231118_Debugging_w_Inceptionv3_MDCJ
-wandb_save,\\store\isilon\archive\EUCRG\Shared folders\Students\2023\Maarten\7-testset
-model_param_csv,231218_inception_debugging
+root_dir,D:\path\to\input\folder
+xlsx_path,D:\path\to\binary\xslx
+train_dirname,Training
+val_dirname,Valildation
+wandb_name,wandb_project_name
+wandb_save,D:\wandb\save\folder
+model_param_csv,D:\path\to\model\parameter\file.csv
 dataload_workers,3
 accumulation_steps,4
-num_epochs,20
-num_trials,1
+num_epochs,50
+num_trials,40
 es_counter,0
 es_limit,15
 tl_loss_rate,1e-4;1e-3;1e-2
@@ -21,3 +21,74 @@ tl_weight_decay_max,1e-1
 tl_gamma_min,0.1
 tl_gamma_max,0.9
 tl_gamma_step,0.1
+
+
+#Explanation paths and hyper parameters:
+#variable				:	Explanation
+#                       :   value
+
+#root_dir				:	Path to the directory that contains the folders for training, validating, and testing the CNN
+#						:	D:\path\to\root_dir
+
+#xlsx_path				:	Path to the Excel file that contains binary labels for CNN prediction
+#						:	D:\path\to\xlsx\file.xlsx
+
+#train_dirname			:	Name of the directory containing the training set
+#						:	Training
+
+#val_dirname			:	Name of the directory containing the validation set
+#						:	Validation
+
+#wandb_name				:	Name of the  run to be displayed in wandb
+#						:	CNN_Run_1
+
+#wandb_save				:	Path to the location where a folder can be made to save all the best models and accompanying metadata .csv file
+#						:	D:\path\to\model\folder
+
+#model_param_csv		:	path to and name of the csv file which will contain the parameter details of each best model produced by a CNN
+#						:	D:\path\to\model\parameter\file.csv
+
+#dataload_workers		:	Number of workers to be spawned for the multi-processed DataLoader
+#						:	3
+
+#accumulation_steps		:	Number of accumulation steps
+#						:	4
+
+#num_epochs				:	Number of epochs to be run for each trial
+#						:	10
+
+#num_trials				:	Number of trials the model should run for
+#						:	200
+
+#es_counter				:	Early stop start value
+#						:	0
+
+#es_limit				:	Early stop training if value is met
+#						:	15
+
+#tl_loss_rate			:	Trial loss rate to be defined as a three item list
+#						:	1e-4;1e-3;1e-2
+
+#tl_batch_norm			:	Trial batch norm
+#						:	True;False
+
+#tl_dropout_rate		:	Trial dropout rate given as a list of values
+#						:	0;0.1;0.2;0.5
+
+#tl_batch_size			:	Trial batch size. Typically between 64-256
+#						:	256
+
+#tl_weight_decay_min	:	Trial minimum weight decay. Cannot be larger that tl_weight_decay_max
+#						:	1e-5
+
+#tl_weight_decay_max	:	Trial maximum weight decay.
+#						:	1e-1
+
+#tl_gamma_min			:	Trial minimum gamma. Cannot be larger that tl_gamma_max
+#						:	0.1
+
+#tl_gamma_max			:	Trial maximum gamma
+#						:	0.9
+
+#tl_gamma_step			:	Trial gamma steps
+#						:	0.1

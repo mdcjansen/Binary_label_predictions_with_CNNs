@@ -6,9 +6,8 @@ scripts can be found, which were produced to aid in the processing of data
 before any of the CNNs scripts were used to train the models.
 
 ## Table of contents
-
-* [requirements](#requirements)
-* [preprocessing data](#preprocessing-data)
+* [Requirements](#requirements)
+* [Preprocessing data](#preprocessing-data)
 * [AlexNet](#AlexNet)
 * [Debugging InceptionV3](#Debugging-InceptionV3)
 * [Debugging running DenseNet121](#Debugging-running-DenseNet121)
@@ -17,12 +16,14 @@ before any of the CNNs scripts were used to train the models.
 * [InceptionV3 epoch loading](#InceptionV3-epoch-loading)
 * [ResNet50](#ResNet50)
 * [ShuffleNet](#ShuffleNet)
-* [auto resort](#auto-resort)
-* [file sorting](#file-sorting)
-* [magnification extraction](#magnification-extraction)
-* [multiprocess extraction](#multiprocess-extraction)
+* [Auto resort](#auto-resort)
+* [File sorting](#file-sorting)
+* [Magnification extraction](#magnification-extraction)
+* [Multiprocess extraction](#multiprocess-extraction)
 * [CNN input parameters](#CNN-input-parameter-csv-file)
+* [binary classification xlsx](#binary-classification-xlsx)
 * [CNN output](#CNN-output)
+
 
 ## Requirements
 All models were run and trained on an in-house anaconda environment.
@@ -275,30 +276,42 @@ Here, an example version of the parameter .csv file is shown that is
 required as input for the CNNs. A description of each variable is also
 present within the .csv file
 
-| Variable            | Value                                    | Description                                                                                                                                                               |
-|---------------------|------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| root_dir            | D:\path\to\root_dir                      | Path to local directory, containing a training and validation folder for training CNNs                                                                                    |
-| xlsx_path           | D:\path\to\binary.xlsx                   | Path to local xlsx file, containing two columns. The first column must have all unique study IDs, the second columns the binary classes for majority (1) and minority (0) |
-| train_dirname       | Training                                 | The name of the folder in root_dir, containing the images for training the model                                                                                          |
-| val_dirname         | Validation                               | The name of the folder in root_dir, containing the images for validating the model                                                                                        |
-| wandb_name          | wandb_project_name                       | Name of the project that will be stored on wandb                                                                                                                          |
-| wandb_save          | D:\path\to\local_wandb_save_folder       | Path to local directory where models and CNN data will be stored that is logged on wandb                                                                                  |
-| model_param_csv     | D:\path\to\CNN_model_hyperparameters.csv | Name of the csv file where the model will be stored along with the hyperparameters to create said model                                                                   |
-| dataload_workers    | 3                                        | Number of multiprocessing workers to be used for the dataloaders (3 workers was determined to be optimal for an Intel(R) I9-13900K                                        |
-| accumulation_steps  | 4                                        | Accumulation step size to be taken during training and validation                                                                                                         |
-| num_epochs          | 50                                       | Number of epochs a model should be trained for                                                                                                                            |
-| num_trials          | 100                                      | Number of trials the code should run for, where one trial equals one model                                                                                                |
-| es_counter          | 0                                        | Start value of the early stop counter                                                                                                                                     |
-| es_limit            | 15                                       | Value at which early stop is trigged and a trial will be terminated                                                                                                       |
-| tl_loss_rate        | 1e-4;1e-3;1e-2                           | Loss rate values to be chosen at random by the CNN during training                                                                                                        |
-| tl_batch_norm       | True;False                               | Allow for batch normalization for the entire trial. Statements chosen at random at the start of a trial                                                                   |
-| tl_dropout_rate     | 0;0.1;0.2;0.5                            | Dropout rate values to be chosen at random for each trial                                                                                                                 |
-| tl_batch_size       | 256                                      | Images are processed in batches during training and validation. batch_size determines the number of images to be included into a batch                                    |
-| tl_weight_decay_min | 1.00E-05                                 | Minimum weight decay to be used during training                                                                                                                           |
-| tl_weight_decay_max | 1.00E-01                                 | Maximum weight decay to be used during training. Must be higher than tl_weight_decay_min. Weight decay will be chosen at random within the given range                    |
-| tl_gamma_min        | 0.1                                      | Minimum gamma to be used during training                                                                                                                                  |
-| tl_gamma_max        | 0.9                                      | Maximum gamma to be used during training. Must be higher than tl_gamma_min. Gamma value will be chosen at random within the given range at the start of a trial           |
-| tl_gamma_step       | 0.1                                      | Gamma step size                                                                                                                                                           |
+| Variable            | Value                                    | Description                                                                                                                                                                                              |
+|---------------------|------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| root_dir            | D:\path\to\root_dir                      | Path to local directory, containing a training and validation folder for training CNNs                                                                                                                   |
+| xlsx_path           | D:\path\to\binary.xlsx                   | Path to local [xlsx file](#binary-classification-xlsx), containing two columns. The first column must have all unique study IDs, the second columns the binary classes for majority (1) and minority (0) |
+| train_dirname       | Training                                 | The name of the folder in root_dir, containing the images for training the model                                                                                                                         |
+| val_dirname         | Validation                               | The name of the folder in root_dir, containing the images for validating the model                                                                                                                       |
+| wandb_name          | wandb_project_name                       | Name of the project that will be stored on wandb                                                                                                                                                         |
+| wandb_save          | D:\path\to\local_wandb_save_folder       | Path to local directory where models and CNN data will be stored that is logged on wandb                                                                                                                 |
+| model_param_csv     | D:\path\to\CNN_model_hyperparameters.csv | Name of the csv file where the model will be stored along with the hyperparameters to create said model                                                                                                  |
+| dataload_workers    | 3                                        | Number of multiprocessing workers to be used for the dataloaders (3 workers was determined to be optimal for an Intel(R) I9-13900K                                                                       |
+| accumulation_steps  | 4                                        | Accumulation step size to be taken during training and validation                                                                                                                                        |
+| num_epochs          | 50                                       | Number of epochs a model should be trained for                                                                                                                                                           |
+| num_trials          | 100                                      | Number of trials the code should run for, where one trial equals one model                                                                                                                               |
+| es_counter          | 0                                        | Start value of the early stop counter                                                                                                                                                                    |
+| es_limit            | 15                                       | Value at which early stop is triggered and a trial will be terminated                                                                                                                                    |
+| tl_loss_rate        | 1e-4;1e-3;1e-2                           | Loss rate values to be chosen at random by the CNN during training                                                                                                                                       |
+| tl_batch_norm       | True;False                               | Allow for batch normalization for the entire trial. Statements chosen at random at the start of a trial                                                                                                  |
+| tl_dropout_rate     | 0;0.1;0.2;0.5                            | Dropout rate values to be chosen at random for each trial                                                                                                                                                |
+| tl_batch_size       | 256                                      | Images are processed in batches during training and validation. batch_size determines the number of images to be included into a batch                                                                   |
+| tl_weight_decay_min | 1.00E-05                                 | Minimum weight decay to be used during training                                                                                                                                                          |
+| tl_weight_decay_max | 1.00E-01                                 | Maximum weight decay to be used during training. Must be higher than tl_weight_decay_min. Weight decay will be chosen at random within the given range                                                   |
+| tl_gamma_min        | 0.1                                      | Minimum gamma to be used during training                                                                                                                                                                 |
+| tl_gamma_max        | 0.9                                      | Maximum gamma to be used during training. Must be higher than tl_gamma_min. Gamma value will be chosen at random within the given range at the start of a trial                                          |
+| tl_gamma_step       | 0.1                                      | Gamma step size                                                                                                                                                                                          |
+
+## Binary classification xlsx
+This Excel file contains two columns which detail which study id has which binary label.
+
+| study_id | binary_label |
+|----------|--------------|
+| 001      | 1            |
+| 078      | 0            |
+| 376      | 1            |
 
 ## CNN output
-
+The CNNs will upload most of their results to their wandb project as specified in the [parameter file](#cnn-input-parameter-csv-file). The results that are saved
+locally are the models it has produced, along with a '.csv' file that contains the hyperparameter details of the produced models.
+On wandb, various graphs are plotted that detail the progression of the models, alongside tables detailing the hyperparameters 
+and input parameters that have been used to create and train the various models.
