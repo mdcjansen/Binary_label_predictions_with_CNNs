@@ -29,8 +29,8 @@ from torchvision.models import convnext_tiny
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.0"
-__date__ = "05/12/2023"
+__version__ = "1.0.1"
+__date__ = "06/12/2023"
 
 # Parameter file path
 param_path = r"D:\path\to\parameter\csv"
