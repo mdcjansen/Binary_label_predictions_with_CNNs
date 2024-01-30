@@ -28,8 +28,8 @@ from torchvision.models import alexnet
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.5"
-__date__ = "11/01/2023"
+__version__ = "1.6"
+__date__ = "30/01/2023"
 
 # Parameter file path
 param_path = r"D:\path\to\parameter\csv"
@@ -351,10 +351,10 @@ def predict(model, data_loader, device):
 
 
 def objective(trial):
-    print(f"Starting trial {trial.number}")
     run = wandb.init(project=parameters['wdb_name'], config={})
     wandb.save(parameters['wdb_save'])
     config = run.config
+    print(f"\nStarting trial {trial.number}")
     trial_lr = trial.suggest_categorical('lr', parameters['tl_lr'])
     trial_batch_norm = trial.suggest_categorical('batch_norm', parameters['tl_bn'])
     trial_dropout_rate = trial.suggest_categorical('dropout_rate', parameters['tl_dr'])
@@ -364,13 +364,12 @@ def objective(trial):
         "batch_size": trial.suggest_categorical('batch_size', parameters['tl_bs']),
         "num_epochs": parameters['num_e'],
         "weight_decay": trial.suggest_float('weight_decay', parameters['tl_wd_min'], parameters['tl_wd_max'], log=True),
-        "step_size": 5,
+        "step_size": parameters['a_steps'],
         "gamma": trial.suggest_float('gamma', parameters['tl_ga_min'], parameters['tl_ga_max'],
                                      step=parameters['tl_ga_tp']),
         "batch_norm": trial_batch_norm,
         "dropout_rate": trial_dropout_rate
-    },
-        allow_val_change=True)
+    }, allow_val_change=True)
 
     train_data_loader = DataLoader(train_dataset,
                                    batch_size=config.batch_size,
@@ -384,7 +383,8 @@ def objective(trial):
                                  pin_memory=True)
 
     model, model_name = create_model(config["batch_norm"], config["dropout_rate"])
-    run.config.update({"model_name": model_name}, allow_val_change=True)
+    config["model_name"] = model_name
+    run.config.update(config, allow_val_change=True)
     model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=config.step_size, gamma=config.gamma)
@@ -395,27 +395,26 @@ def objective(trial):
     early_stop_limit = parameters['es_limit']
 
     for epoch in range(config["num_epochs"]):
-        print(f"Epoch {epoch + 1} - Started")
-        training_loss, training_metrics, train_patient_metrics = train(model,
-                                                                       train_data_loader,
-                                                                       optimizer,
-                                                                       scheduler,
-                                                                       device,
-                                                                       scaler
-                                                                       )
+        print(f"\nEpoch {epoch + 1} - Started")
+        training_loss, training_metrics, train_patient_metrics = train(model, train_data_loader, optimizer, scheduler,
+                                                                       device, scaler)
         log_metrics(training_metrics, 'train', 'img', training_loss)
         log_metrics(train_patient_metrics, 'train', 'ptnt', None)
-        print(f"Epoch {epoch + 1} - Training Metrics:\t\t"
-              f"Acc: {training_metrics['acc']:.4f}, "
-              f"F1: {training_metrics['f1']:.4f}, "
-              f"Bal Acc: {training_metrics['bal_acc']:.4f}, "
-              f"Loss: {training_loss:.4f}"
-              )
+        try:
+            print(f"Epoch {epoch + 1} - Training Metrics:\t\t"
+                  f"Acc: {training_metrics['acc']:.4f}, "
+                  f"F1: {training_metrics['f1']:.4f}, "
+                  f"AUC: {training_metrics['roc_auc']:.4f}, "
+                  f"Bal Acc: {training_metrics['bal_acc']:.4f}, "
+                  f"Loss: {training_loss:.4f} "
+                  f"cm: {training_metrics['cm']:.4f}"
+                  )
+        except:
+            continue
         validation_loss, validation_metrics = validate(model, val_data_loader, device)
         bal_acc = validation_metrics['bal_acc']
-        is_best_loss = validation_loss < best_val_loss
 
-        if is_best_loss:
+        if validation_loss < best_val_loss:
             best_val_loss = validation_loss
             early_stop_counter = 0
             torch.save(model.state_dict(), generate_filename('best_model', run.name, config, 'loss', epoch))
@@ -430,41 +429,47 @@ def objective(trial):
                 print("\n\n\n")
                 break
 
-        is_best_bal_acc = bal_acc > best_bal_acc
-        if is_best_bal_acc:
+        if bal_acc > best_bal_acc:
             best_bal_acc = bal_acc
             torch.save(model.state_dict(), generate_filename('best_model', run.name, config, 'bal_acc', epoch))
-            with open('model_parameters.csv', 'a+') as model_csv:
+            with open(parameters['ml_csv'], 'a+') as model_csv:
                 ml_params = [f"{key}={value}" for key, value in config.items() if key not in ['project']]
-                model_csv.write(f"{run.name},bal_acc,epoch={epoch + 1},{','.join(ml_params)}\n")
+                model_csv.write(f"{run.name},loss,epoch={epoch + 1},{','.join(ml_params)}\n")
             model_csv.close()
 
+        trial.report(validation_loss, epoch)
         log_metrics(validation_metrics, 'val', 'img', validation_loss)
-        print(f"Epoch {epoch + 1} - Validation Metrics:\t\t"
-              f"Acc: {validation_metrics['acc']:.4f}, "
-              f"F1: {validation_metrics['f1']:.4f}, "
-              f"Bal Acc: {bal_acc:.4f}, "
-              f"Loss: {validation_loss:.4f}"
-              )
+        try:
+            print(f"Epoch {epoch + 1} - Validation Metrics:\t\t"
+                  f"Acc: {validation_metrics['acc']:.4f}, "
+                  f"F1: {validation_metrics['f1']:.4f}, "
+                  f"AUC {validation_metrics['roc_auc']:.4f}, "
+                  f"Bal Acc: {bal_acc:.4f}, "
+                  f"Loss: {validation_loss:.4f} "
+                  f"cm: {validation_metrics['cm']:.4f}"
+                  )
+        except:
+            continue
         batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probs = predict(model,
-                                                                                                               val_data_loader,
-                                                                                                               device)
+                                                                                                               val_data_loader)
         patient_metrics = calculate_metrics(patient_labels, patient_predictions, patient_probs)
         log_metrics(patient_metrics, 'val', 'ptnt', None)
-        print(f"Epoch {epoch + 1} - Patient-Level Metrics:\t"
-              f"Acc: {patient_metrics['acc']:.4f}, "
-              f"F1: {patient_metrics['f1']:.4f}, "
-              f"Bal Acc: {patient_metrics['bal_acc']:.4f}"
-              )
-
+        try:
+            print(f"Epoch {epoch + 1} - Patient-Level Metrics:\t"
+                  f"Acc: {patient_metrics['acc']:.4f}, "
+                  f"F1: {patient_metrics['f1']:.4f}, "
+                  f"AUC: {patient_metrics['roc_auc']:.4f}, "
+                  f"Bal Acc: {patient_metrics['bal_acc']:.4f}"
+                  f"cm: {patient_metrics['cm']:.4f}"
+                  )
+        except:
+            continue
         if trial.should_prune():
             raise optuna.exceptions.TrialPruned()
 
         print(f"Epoch {epoch + 1} - Finished\n")
 
     run.finish()
-    print(f"Trial {trial.number} complete.")
-
     return best_val_loss
 
 
@@ -477,10 +482,14 @@ def main():
 
 if __name__ == '__main__':
     mp.set_start_method('spawn', force=True)
+
     parameters = load_parameters(param_path)
     root_dir = parameters['root_dir']
     xlsx_dir = parameters['xlsx_dir']
-    transform = transforms.Compose([custom_transform])
+    # =============================================================================
+    #     transform = transforms.Compose([custom_transform])
+    # =============================================================================
+    transform = transforms.Compose([transforms.ToTensor()])
 
     train_dataset = CustomImageDataset(os.path.join(parameters['root_dir'],
                                                     parameters['train_dir']),
@@ -491,11 +500,10 @@ if __name__ == '__main__':
                                      parameters['xlsx_dir'],
                                      transform=transform)
 
-    print("Training index processing:")
+    print("\nTraining index processing:")
     train_class_counts = get_class_counts(train_dataset)
     print("\nValidation index processing:")
     val_class_counts = get_class_counts(val_dataset)
-
     print("\nTraining set class counts:")
     for label, count in train_class_counts.items():
         print(f"Class {label}: {count} images")
