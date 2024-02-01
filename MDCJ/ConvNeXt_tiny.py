@@ -5,37 +5,30 @@ import numpy as np
 import optuna
 import os
 import pandas as pd
-# =============================================================================
-# import random
-# =============================================================================
+import random
 import timm
 import torch
-# =============================================================================
-# import torch.autograd.profiler as profiler
-# =============================================================================
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.multiprocessing as mp
 import torch.optim as optim
 import torchvision.transforms as transforms
 import wandb
-
 from collections import defaultdict
 from PIL import Image
 from scipy import stats
-from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, precision_score, recall_score, roc_curve, auc, confusion_matrix, roc_auc_score
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, precision_score, recall_score, confusion_matrix, roc_auc_score
 from torch.cuda.amp import autocast, GradScaler
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
-
 from torch.nn.functional import sigmoid
 from torch.nn.functional import binary_cross_entropy_with_logits as F_binary_cross_entropy_with_logits
 
 # Credentials
 __author__ = "M.D.C. Jansen"
-__version__ = "1.3"
-__date__ = "24/01/2024"
+__version__ = "1.4"
+__date__ = "01/02/2024"
 
 # Parameter file path
 param_path = r"D:\path\to\parameter\csv"
@@ -56,25 +49,19 @@ class CustomImageDataset(Dataset):
     def __getitem__(self, idx):
         img_name = self.all_images[idx]
         segments = img_name.split('_')
-
         if len(segments) <= 1:
             raise ValueError(f"Unexpected image name format for {img_name}")
-
         study_id = segments[1]
         label_entries = self.df_labels[self.df_labels['study_id'] == int(study_id)]['label'].values
-
         if len(label_entries) == 0:
             print(f"No label found for study_id: {study_id} in image {img_name}.")
             label = None
         else:
             label = label_entries[0]
-
         image = Image.open(img_name).convert('RGB')
         image = image.resize((300, 300))
-
         if self.transform:
             image = self.transform(image)
-
         return image, label, study_id
 
 
@@ -88,21 +75,16 @@ class CustomHead(nn.Module):
 
     def forward(self, x):
         x = x.reshape(x.size(0), -1)
-
         if x.size(1) != self.expected_input_size:
             raise ValueError(f"Expected input size to be {self.expected_input_size}, but got {x.size(1)}")
-
         x = self.fc(x)
-
         if self.batch_norm:
             x = self.batch_norm(x)
-
         x = self.dropout(x)
-
         return x
 
 
-def generate_filename(prefix, run_name, config, criterion, epoch):
+def generate_filename(prefix, run_name, criterion, epoch):
     return os.path.join(os.path.dirname(os.path.realpath(__file__)),
                         os.path.join("Best models", f"{prefix}_{run_name}_epoch_{epoch + 1}_{criterion}.pt"))
 
@@ -114,7 +96,6 @@ def load_parameters(param_path):
         for d in details:
             input_param.setdefault(d['variable'], []).append(d['value'])
         param_file.close()
-
     input_variables = {
         'root_dir': ''.join(input_param['root_dir']),
         'xlsx_dir': ''.join(input_param['xlsx_path']),
@@ -139,26 +120,21 @@ def load_parameters(param_path):
         'tl_ga_max': float(''.join(input_param['tl_gamma_max'])),
         'tl_ga_tp': float(''.join(input_param['tl_gamma_step']))
     }
-
     return input_variables
 
 
-# =============================================================================
-# def custom_transform(image):
-#     rd_colour_change = random.random() < 0.3
-#
-#     if rd_colour_change:
-#         brightness = random.uniform(0.0 , 0.25)
-#         contrast =  random.uniform(0.0 , 0.2)
-#         saturation =  random.uniform(0.0 , 0.4)
-#         hue =  random.uniform(0.0 , 0.5)
-#         image = transforms.functional.adjust_brightness (image, brightness)
-#         image = transforms.functional.adjust_contrast(image, contrast)
-#         image = transforms.functional.adjust_saturation(image, saturation)
-#         image = transforms.functional.adjust_hue(image, hue)
-#
-#     return transforms.functional.to_tensor(image)
-# =============================================================================
+def custom_transform(image):
+    rd_colour_change = random.random() < 0.3
+    if rd_colour_change:
+        brightness = random.uniform(0.0, 0.25)
+        contrast = random.uniform(0.0, 0.2)
+        saturation = random.uniform(0.0, 0.4)
+        hue = random.uniform(0.0, 0.5)
+        image = transforms.functional.adjust_brightness (image, brightness)
+        image = transforms.functional.adjust_contrast(image, contrast)
+        image = transforms.functional.adjust_saturation(image, saturation)
+        image = transforms.functional.adjust_hue(image, hue)
+    return transforms.functional.to_tensor(image)
 
 
 def load_img_label(dataset):
@@ -190,7 +166,6 @@ def get_class_counts(dataset):
 def calculate_metrics(y_true, y_pred, y_proba, pos_label=1):
     if isinstance(y_proba, torch.Tensor):
         y_proba = y_proba.cpu().numpy()
-
     try:
         metrics = {
             'acc': accuracy_score(y_true, y_pred),
@@ -204,7 +179,6 @@ def calculate_metrics(y_true, y_pred, y_proba, pos_label=1):
     except ValueError as e:
         print(f"Error calculating metrics: {e}")
         metrics = {metric: None for metric in ['acc', 'bal_acc', 'f1', 'precision', 'recall', 'roc_auc', 'cm']}
-
     return metrics
 
 
@@ -223,33 +197,25 @@ def log_metrics(metrics, split, prefix, loss):
 
 def create_model(batch_norm, dropout_rate, fine_tune_last_n=10):
     model = timm.create_model('convnext_tiny', pretrained=True)
-
     for param in model.parameters():
         param.requires_grad = False
-
     last_stage_blocks = list(model.stages[-1].blocks)
     fine_tune_last_n = min(fine_tune_last_n, len(last_stage_blocks))
-
     for block in last_stage_blocks[-fine_tune_last_n:]:
         for param in block.parameters():
             param.requires_grad = True
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     dummy_input = torch.randn(1, 3, 299, 299, device=device)
-
     with torch.no_grad():
         model.eval()
         features = model.forward_features(dummy_input)
         features_flattened = features.reshape(features.size(0), -1)
         input_features = features_flattened.size(1)
-
     model.head = CustomHead(input_features, 1, batch_norm, dropout_rate).to(device)
-
     for param in model.head.parameters():
         param.requires_grad = True
-
-    return model, "ConvNeXt_tiny"
+    return model, "ConvNeXt Tiny"
 
 
 def train(model, train_data_loader, optimizer, scheduler, device, scaler):
@@ -259,7 +225,6 @@ def train(model, train_data_loader, optimizer, scheduler, device, scaler):
     all_labels = []
     y_logits = []
     optimizer.zero_grad()
-
     for i, (images, labels, study_ids) in enumerate(train_data_loader):
         images, labels = images.to(device), labels.to(device)
         with autocast():
@@ -277,14 +242,11 @@ def train(model, train_data_loader, optimizer, scheduler, device, scaler):
         y_logits.extend(outputs.squeeze().detach().cpu().numpy())
         total_loss += loss.item() * images.size(0)
         torch.cuda.empty_cache()
-
     scheduler.step()
     metrics = calculate_metrics(all_labels, all_predictions, y_logits)
     _, _, train_patient_predictions, train_patient_labels, _, train_patient_probs = predict(model, train_data_loader)
     train_patient_metrics = calculate_metrics(train_patient_labels, train_patient_predictions, train_patient_probs)
-
     del all_predictions, all_labels, y_logits
-
     return total_loss / len(train_data_loader.dataset), metrics, train_patient_metrics
 
 
@@ -294,7 +256,6 @@ def validate(model, val_data_loader, device):
     all_predictions = []
     all_labels = []
     y_proba = []
-
     with torch.no_grad():
         for images, labels, study_ids in val_data_loader:
             images, labels = images.to(device), labels.to(device)
@@ -308,9 +269,7 @@ def validate(model, val_data_loader, device):
             probas = sigmoid(outputs.squeeze().detach().cpu().float())
             y_proba.extend(probas.numpy())
             torch.cuda.empty_cache()
-
     metrics = calculate_metrics(all_labels, all_predictions, y_proba)
-
     return total_loss / len(val_data_loader.dataset), metrics
 
 
@@ -321,7 +280,6 @@ def predict(model, data_loader):
     batch_labels = []
     study_summary = {}
     y_proba = []
-
     with torch.no_grad():
         for i, (inputs, labels, study_ids) in enumerate(data_loader):
             inputs = inputs.to(device)
@@ -345,7 +303,6 @@ def predict(model, data_loader):
             patient_predictions.append(stats.mode(study_summary[study_id]['predictions'], keepdims=True)[0][0])
             patient_probabilities.append(np.mean(study_summary[study_id]['probs']))
             patient_labels.append(stats.mode(study_summary[study_id]['labels'], keepdims=True)[0][0])
-
         return batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probabilities
 
 
@@ -357,7 +314,6 @@ def objective(trial):
     trial_lr = trial.suggest_categorical('lr', parameters['tl_lr'])
     trial_batch_norm = trial.suggest_categorical('batch_norm', parameters['tl_bn'])
     trial_dropout_rate = trial.suggest_categorical('dropout_rate', parameters['tl_dr'])
-
     run.config.update({
         "lr": trial_lr,
         "batch_size": trial.suggest_categorical('batch_size', parameters['tl_bs']),
@@ -369,7 +325,6 @@ def objective(trial):
         "batch_norm": trial_batch_norm,
         "dropout_rate": trial_dropout_rate
     }, allow_val_change=True)
-
     train_data_loader = DataLoader(train_dataset,
                                    batch_size=config.batch_size,
                                    shuffle=True,
@@ -380,7 +335,6 @@ def objective(trial):
                                  shuffle=False,
                                  num_workers=parameters['dl_work'],
                                  pin_memory=True)
-
     model, model_name = create_model(config["batch_norm"], config["dropout_rate"])
     config["model_name"] = model_name
     run.config.update(config, allow_val_change=True)
@@ -392,31 +346,25 @@ def objective(trial):
     best_bal_acc = float('-inf')
     early_stop_counter = parameters['es_count']
     early_stop_limit = parameters['es_limit']
-
     for epoch in range(config["num_epochs"]):
         print(f"\nEpoch {epoch + 1} - Started")
         training_loss, training_metrics, train_patient_metrics = train(model, train_data_loader, optimizer, scheduler,
                                                                        device, scaler)
         log_metrics(training_metrics, 'train', 'img', training_loss)
         log_metrics(train_patient_metrics, 'train', 'ptnt', None)
-        try:
-            print(f"Epoch {epoch + 1} - Training Metrics:\t\t"
-                  f"Acc: {training_metrics['acc']:.4f}, "
-                  f"F1: {training_metrics['f1']:.4f}, "
-                  f"AUC: {training_metrics['roc_auc']:.4f}, "
-                  f"Bal Acc: {training_metrics['bal_acc']:.4f}, "
-                  f"Loss: {training_loss:.4f} "
-                  f"cm: {training_metrics['cm']:.4f}"
-                  )
-        except:
-            continue
+        print(f"Epoch {epoch + 1} - Training Metrics:\t\t"
+              f"Acc: {training_metrics['acc']:.4f}, "
+              f"F1: {training_metrics['f1']:.4f}, "
+              f"AUC: {training_metrics['roc_auc']:.4f}, "
+              f"Bal Acc: {training_metrics['bal_acc']:.4f}, "
+              f"Loss: {training_loss:.4f} "
+              )
         validation_loss, validation_metrics = validate(model, val_data_loader, device)
         bal_acc = validation_metrics['bal_acc']
-
         if validation_loss < best_val_loss:
             best_val_loss = validation_loss
             early_stop_counter = 0
-            torch.save(model.state_dict(), generate_filename('best_model', run.name, config, 'loss', epoch))
+            torch.save(model.state_dict(), generate_filename('best_model', run.name, 'loss', epoch))
             with open(parameters['ml_csv'], 'a+') as model_csv:
                 ml_params = [f"{key}={value}" for key, value in config.items() if key not in ['project']]
                 model_csv.write(f"{run.name},loss,epoch={epoch + 1},{','.join(ml_params)}\n")
@@ -427,47 +375,35 @@ def objective(trial):
                 print('Early stopping triggered')
                 print("\n\n\n")
                 break
-
         if bal_acc > best_bal_acc:
             best_bal_acc = bal_acc
-            torch.save(model.state_dict(), generate_filename('best_model', run.name, config, 'bal_acc', epoch))
+            torch.save(model.state_dict(), generate_filename('best_model', run.name, 'bal_acc', epoch))
             with open(parameters['ml_csv'], 'a+') as model_csv:
                 ml_params = [f"{key}={value}" for key, value in config.items() if key not in ['project']]
                 model_csv.write(f"{run.name},loss,epoch={epoch + 1},{','.join(ml_params)}\n")
             model_csv.close()
-
         trial.report(validation_loss, epoch)
         log_metrics(validation_metrics, 'val', 'img', validation_loss)
-        try:
-            print(f"Epoch {epoch + 1} - Validation Metrics:\t\t"
-                  f"Acc: {validation_metrics['acc']:.4f}, "
-                  f"F1: {validation_metrics['f1']:.4f}, "
-                  f"AUC {validation_metrics['roc_auc']:.4f}, "
-                  f"Bal Acc: {bal_acc:.4f}, "
-                  f"Loss: {validation_loss:.4f} "
-                  f"cm: {validation_metrics['cm']:.4f}"
-                  )
-        except:
-            continue
+        print(f"Epoch {epoch + 1} - Validation Metrics:\t\t"
+              f"Acc: {validation_metrics['acc']:.4f}, "
+              f"F1: {validation_metrics['f1']:.4f}, "
+              f"AUC: {validation_metrics['roc_auc']:.4f}, "
+              f"Bal Acc: {bal_acc:.4f}, "
+              f"Loss: {validation_loss:.4f} "
+              )
         batch_predictions, batch_labels, patient_predictions, patient_labels, y_proba, patient_probs = predict(model,
                                                                                                                val_data_loader)
         patient_metrics = calculate_metrics(patient_labels, patient_predictions, patient_probs)
         log_metrics(patient_metrics, 'val', 'ptnt', None)
-        try:
-            print(f"Epoch {epoch + 1} - Patient-Level Metrics:\t"
-                  f"Acc: {patient_metrics['acc']:.4f}, "
-                  f"F1: {patient_metrics['f1']:.4f}, "
-                  f"AUC: {patient_metrics['roc_auc']:.4f}, "
-                  f"Bal Acc: {patient_metrics['bal_acc']:.4f}"
-                  f"cm: {patient_metrics['cm']:.4f}"
-                  )
-        except:
-            continue
+        print(f"Epoch {epoch + 1} - Patient-Level Metrics:\t"
+              f"Acc: {patient_metrics['acc']:.4f}, "
+              f"F1: {patient_metrics['f1']:.4f}, "
+              f"AUC: {patient_metrics['roc_auc']:.4f}, "
+              f"Bal Acc: {patient_metrics['bal_acc']:.4f}"
+              )
         if trial.should_prune():
             raise optuna.exceptions.TrialPruned()
-
         print(f"Epoch {epoch + 1} - Finished\n")
-
     run.finish()
     return best_val_loss
 
@@ -481,15 +417,11 @@ def main():
 
 if __name__ == '__main__':
     mp.set_start_method('spawn', force=True)
-
     parameters = load_parameters(param_path)
     root_dir = parameters['root_dir']
     xlsx_dir = parameters['xlsx_dir']
-    # =============================================================================
-    #     transform = transforms.Compose([custom_transform])
-    # =============================================================================
-    transform = transforms.Compose([transforms.ToTensor()])
-
+    transform = transforms.Compose([custom_transform])
+    # transform = transforms.Compose([transforms.ToTensor()])
     train_dataset = CustomImageDataset(os.path.join(parameters['root_dir'],
                                                     parameters['train_dir']),
                                        parameters['xlsx_dir'],
@@ -498,7 +430,6 @@ if __name__ == '__main__':
                                                   parameters['val_dir']),
                                      parameters['xlsx_dir'],
                                      transform=transform)
-
     print("\nTraining index processing:")
     train_class_counts = get_class_counts(train_dataset)
     print("\nValidation index processing:")
@@ -506,18 +437,14 @@ if __name__ == '__main__':
     print("\nTraining set class counts:")
     for label, count in train_class_counts.items():
         print(f"Class {label}: {count} images")
-
     print("\nValidation set class counts:")
     for label, count in val_class_counts.items():
         print(f"Class {label}: {count} images")
-
     print("\nChecking for GPU availability...")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
-
     if not os.path.exists('Best models'):
         os.makedirs('Best models')
-
     print("\nStarting main")
     main()
     print("Main complete")
