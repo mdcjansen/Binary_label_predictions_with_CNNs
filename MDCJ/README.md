@@ -1,14 +1,14 @@
 # MDCJ
 
-This folder contains various scripts produced during the project. These 
-include various scripts to run a multitude of CNNs. Additionally, a few utility
-scripts can be found, which were produced to aid in the processing of data
-before any of the CNNs scripts were used to train the models.
+This folder contains various scripts produced during the project. These include various scripts to run a multitude of 
+CNNs. Additionally, a few utility scripts can be found, which were produced to aid in the processing of data before any 
+of the CNNs scripts were used to train the models.
 
 ## Table of contents
 * [Requirements](#requirements)
 * [Preprocessing data](#preprocessing-data)
 * [AlexNet](#AlexNet)
+* [ConvNeXt Tiny](#ConvNeXt-Tiny)
 * [Debugging InceptionV3](#Debugging-InceptionV3)
 * [Debugging running DenseNet121](#Debugging-running-DenseNet121)
 * [DenseNet121](#DenseNet121)
@@ -23,25 +23,23 @@ before any of the CNNs scripts were used to train the models.
 * [CNN input parameters](#CNN-input-parameter-csv-file)
 * [binary classification xlsx](#binary-classification-xlsx)
 * [CNN output](#CNN-output)
+* [Acknowledgements](#Acknowledgements)
+* [License](#License)
 
 
 ## Requirements
-All models were run and trained on an in-house anaconda environment.
-This environment mirrors the freely [pytorch2 environment](https://pytorch.org/get-started/pytorch-2.0/#getting-started). Additionally,
-[wandb.ai](https://wandb.ai/site) is required for logging the training and validation data produced 
-by the CNNs
+All models were run and trained on an in-house anaconda environment. This environment mirrors the freely 
+[pytorch2 environment](https://pytorch.org/get-started/pytorch-2.0/#getting-started). Additionally, 
+[wandb.ai](https://wandb.ai/site) is required for logging the training and validation data produced by the CNNs
 
 ## Preprocessing data
-This folder contains multiple scripts that were used in preprocessing the
-data before running the CNNs. These include patch extraction scripts,
-Macenko normalisation, colour augmentation, k-fold cross validation, and
-oversampling.
+This folder contains multiple scripts that were used in preprocessing the data before running the CNNs. These include 
+patch extraction scripts, Marchenko normalisation, colour augmentation, k-fold cross validation, and oversampling.
 
 ## AlexNet
-This script will train AlexNet models on the input dataset. By modifying the
-[parameter csv file](#CNN-input-parameter-csv-file), the hyperparameters can be tuned in addition to
-determining the number of trials and epochs the CNN should run for.
-Results will automatically be logged to wandb.ai
+This script will train AlexNet models on the input dataset. By modifying the 
+[parameter csv file](#CNN-input-parameter-csv-file), the hyperparameters can be tuned in addition to determining the 
+number of trials and epochs the CNN should run for. Results will automatically be logged to wandb.ai
 
 AlexNet can be run in the pytorch2 environment by running the command 
 below:
@@ -49,27 +47,33 @@ below:
 python AlexNet.py
 ```
 
-## Debugging InceptionV3
-This version of InceptionV3 was used to debug the initial CNN script in
-order to train the models and allow for a dynamic design, which has
-allowed for a faster adaptation of other CNNs used.
+## ConvNeXt Tiny
+This script will train ConvNeXt Tiny models on the input dataset. By modifying the 
+[parameter csv file](#CNN-input-parameter-csv-file), the hyperparameters can be tuned in addition to determining the 
+number of trials and epochs the CNN should run for. Results will be automatically logged to wandb.ai
 
-This version can still contain bugs, and it is not recommended to use this
-script to train InceptionV3 models.
+ConvNeXt Tiny can be run in the pytorch2 environment by running the command below:
+```
+python ConvNeXt_tiny.py
+```
+
+## Debugging InceptionV3
+This version of InceptionV3 was used to debug the initial CNN script in order to train the models and allow for a 
+dynamic design, which has allowed for a faster adaptation of other CNNs used.
+
+This version can still contain bugs, and it is not recommended to use this script to train InceptionV3 models.
 
 ## Debugging running DenseNet121
-This version of DenseNet121 is designed to run the models created by the
-[DenseNet121](#DenseNet121) script. Where the last few layers of the DenseNet model are
-manually modified to allow the created models to be newly loaded 
-and create predictions on novel datasets.
+This version of DenseNet121 is designed to run the models created by the [DenseNet121](#DenseNet121) script.
+Where the last few layers of the DenseNet model are manually modified to allow the created models to be newly loaded and
+create predictions on novel datasets.
 
 This script is currently still in development. 
 
 ## DenseNet121
 This script will train DenseNet121 models on the input dataset. By modifying the
-[parameter csv file](#CNN-input-parameter-csv-file), the hyperparameters can be tuned in addition to
-determining the number of trials and epochs the CNN should run for.
-Results will automatically be logged to wandb.ai
+[parameter csv file](#CNN-input-parameter-csv-file), the hyperparameters can be tuned in addition to determining the 
+number of trials and epochs the CNN should run for. Results will automatically be logged to wandb.ai
 
 DenseNet121 can be run in the pytorch2 environment by running the 
 command below:
@@ -78,14 +82,12 @@ python DenseNet121.py
 ```
 
 ## InceptionV3
-This script will train InceptionV3 models on the input dataset. This script
-was developed before the other CNN scripts were produced. New
-changes to the models will be tested on InceptionV3, before they will are
-adapted to the other CNN scripts.
+This script will train InceptionV3 models on the input dataset. This script was developed before the other CNN scripts 
+were produced. New changes to the models will be tested on InceptionV3, before they will are adapted to the other 
+CNN scripts.
 
-By modifying the [parameter csv file](#CNN-input-parameter-csv-file), the hyperparameters can be tuned in
-addition to determining the number of trials and epochs the CNN
-should run for. Results will automatically be logged to wandb.ai
+By modifying the [parameter csv file](#CNN-input-parameter-csv-file), the hyperparameters can be tuned in addition to 
+determining the number of trials and epochs the CNN should run for. Results will automatically be logged to wandb.ai
 
 InceptionV3 can be run in the pytorch2 environment by running the 
 command below:
@@ -94,24 +96,19 @@ python InceptionV3.py
 ```
 
 ## InceptionV3 epoch loading
-This script will train InceptionV3 models on the input dataset. This script
-was developed to load all training data used for a trial before training,
-instead of loading and unloading the data used to train one epoch. This
-method of loading data saved up to 30 seconds when training without
-colour augmentation, and up to 200 seconds when training on data with
-colour augmentation. Results are based on training InceptionV3 with 
-20.000 images using an RTX 4090. 
+This script will train InceptionV3 models on the input dataset. This script was developed to load all training data used
+for a trial before training, instead of loading and unloading the data used to train one epoch. This method of loading 
+data saved up to 30 seconds when training without colour augmentation, and up to 200 seconds when training on data with 
+colour augmentation. Results are based on training InceptionV3 with 20.000 images using an RTX 4090. 
 
-Development of this script was discontinued in favour of the old design, 
-due to time constrained and persistent issues in properly loading, ordering,
-of input data. In addition to logging of metrics to wandb and simplifying
-the CNN script for future bug fixing and improvements.
+Development of this script was discontinued in favour of the old design, due to time constrained and persistent issues 
+in properly loading, ordering, of input data. In addition to logging of metrics to wandb and simplifying the CNN script 
+for future bug fixing and improvements.
 
 ## ResNet50
 This script will train ResNet50 models on the input dataset. By modifying the
-[parameter csv file](#CNN-input-parameter-csv-file), the hyperparameters can be tuned in addition to
-determining the number of trials and epochs the CNN should run for.
-Results will automatically be logged to wandb.ai
+[parameter csv file](#CNN-input-parameter-csv-file), the hyperparameters can be tuned in addition to determining the 
+number of trials and epochs the CNN should run for. Results will automatically be logged to wandb.ai
 
 ResNet50 can be run in the pytorch2 environment by running the 
 command below:
@@ -121,9 +118,8 @@ python ResNet50.py
 
 ## ShuffleNet
 This script will train ShuffleNet models on the input dataset. By modifying the
-[parameter csv file](#CNN-input-parameter-csv-file), the hyperparameters can be tuned in addition to
-determining the number of trials and epochs the CNN should run for.
-Results will automatically be logged to wandb.ai
+[parameter csv file](#CNN-input-parameter-csv-file), the hyperparameters can be tuned in addition to determining the 
+number of trials and epochs the CNN should run for. Results will automatically be logged to wandb.ai
 
 ShuffleNet can be run in the pytorch2 environment by running the 
 command below:
@@ -132,14 +128,13 @@ python ShuffleNet.py
 ```
 
 ## Auto resort
-This script automatically filters files out of folders into a single destination folder, 
-based on previously sorted files with identical names.
-Paths and suffixes should be changed by the user based on their own
-folder structure and file names
+This script automatically filters files out of folders into a single destination folder, based on previously sorted 
+files with identical names. Paths and suffixes should be changed by the user based on their own folder structure and 
+file names
 
 Example:
 
-Data folder:
+Data folder (first input):
 ```
 	.
 	├── ...
@@ -164,7 +159,7 @@ Data folder:
 	└── ...
 ```
 
-Previously sorted files:
+Previously sorted files (second input):
 ```
 Unique_id_1.img
 Unique_id_3.img
@@ -172,7 +167,7 @@ Unique_id_7.img
 Unique_id_8.img
 ```
 
-Output folder result:
+Output folder result (output):
 ```
 Unique_id_1.img
 Unique_id_3.img
@@ -181,8 +176,8 @@ Unique_id_8.img
 ```
 
 ## File sorting
-Sorts files with unique identifiers into their own folder. The script looks for 
-the unique identifier right after the first underscore.
+Sorts files with unique identifiers into their own folder. The script looks for the unique identifier right after the 
+first underscore.
 
 Example:
 
@@ -237,44 +232,36 @@ Result:
 ```
 
 ## Magnification extraction
-This script was developed to automatically extract a set of images of a
-lower magnification(l-mag), by using the corner coordinates found in the name of a
-higher magnification(h-mag) image.
+This script was developed to automatically extract a set of images of a lower magnification(l-mag), by using the corner 
+coordinates found in the name of a higher magnification(h-mag) image.
 
-The script takes three inputs, where the inner folder structure of the folders
-do not matter and will be replicated by the script
+The script takes three inputs, where the inner folder structure of the folders do not matter and will be replicated by 
+the script
 - One input folder containing lower magnification images to be extracted
 - One output folder, which can be created by the script
 - One folder containing images of higher magnification
 
-It is assumed that the folder containing higher magnification images only 
-contains images with suffixes that match those of the images in the input
-folder. Additionally, the script assumes that the X and Y coordinates
-presented in the file name are from the top left corner.
+It is assumed that the folder containing higher magnification images only contains images with suffixes that match those
+of the images in the input folder. Additionally, the script assumes that the X and Y coordinates presented in the file 
+name are from the top left corner.
 
-The script will first grab the X and Y coordinates from a h-mag image.
-Next, the coordinates of the other three corners are calculated, using the
-presented height and width in pixels. After all coordinates, have been
-determined, the script will walk through all l-mag images and
-one by one calculate the corner coordinates and check if all four h-mag coordinates are 
-present within the l-mag coordinates. If all coordinates are present, the
-l-mag image is moved to the output folder. If one or more coordinates do
-not fit, the image will stay within the input folder.
+The script will first grab the X and Y coordinates from a h-mag image. Next, the coordinates of the other three corners 
+are calculated, using the presented height and width in pixels. After all coordinates, have been determined, the script 
+will walk through all l-mag images and one by one calculate the corner coordinates and check if all four h-mag 
+coordinates are present within the l-mag coordinates. If all coordinates are present, the l-mag image is moved to the 
+output folder. If one or more coordinates do not fit, the image will stay within the input folder.
 
 
 ## Multiprocess extraction
-This version of magnification extraction utilises multiprocessing to
-significantly improve extraction time compared to [Magnification extraction](#magnification-extraction).
-Additionally, a second folder containing h-mag images must now be
-defined. This folder functions the same as the first h-mag folder, with the
-change being that only two of the four coordinates need to be present in
-the l-mag image for it to be extracted.
+This version of magnification extraction utilises multiprocessing to significantly improve extraction time compared to 
+[Magnification extraction](#magnification-extraction). Additionally, a second folder containing h-mag images must now be
+defined. This folder functions the same as the first h-mag folder, with the change being that only two of the four 
+coordinates need to be present in the l-mag image for it to be extracted.
 
 
 ## CNN input parameter csv file
-Here, an example version of the parameter .csv file is shown that is
-required as input for the CNNs. A description of each variable is also
-present within the .csv file
+Here, an example version of the parameter .csv file is shown that is required as input for the CNNs. A description of 
+each variable is also present within the .csv file
 
 | Variable            | Value                                    | Description                                                                                                                                                                                              |
 |---------------------|------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -302,7 +289,8 @@ present within the .csv file
 | tl_gamma_step       | 0.1                                      | Gamma step size                                                                                                                                                                                          |
 
 ## Binary classification xlsx
-This Excel file contains two columns which detail which study id has which binary label.
+This Excel file contains two columns which detail which study id has which binary label. An Example is given below.
+The IDs and labels were chosen at random
 
 | study_id | binary_label |
 |----------|--------------|
@@ -311,7 +299,18 @@ This Excel file contains two columns which detail which study id has which binar
 | 376      | 1            |
 
 ## CNN output
-The CNNs will upload most of their results to their wandb project as specified in the [parameter file](#cnn-input-parameter-csv-file). The results that are saved
-locally are the models it has produced, along with a '.csv' file that contains the hyperparameter details of the produced models.
-On wandb, various graphs are plotted that detail the progression of the models, alongside tables detailing the hyperparameters 
-and input parameters that have been used to create and train the various models.
+The CNNs will upload most of their results to their wandb project as specified in the 
+[parameter file](#cnn-input-parameter-csv-file). The results that are saved locally are the models it has produced, 
+along with a '.csv' file that contains the hyperparameter details of the produced models. On wandb, various graphs are 
+plotted that detail the progression of the models, alongside tables detailing the hyperparameters and input parameters 
+that have been used to create and train the various models.
+
+## Acknowledgements
+* [AlexNet](https://doi.org/10.1145/3065386)
+* [DenseNet121](https://doi.org/10.48550/arXiv.1608.06993)
+* [ConvNeXt Tiny](https://doi.org/10.48550/arXiv.2201.03545)
+* [InceptionV3](https://doi.org/10.48550/arXiv.1512.00567)
+* [PyTorch](https://dl.acm.org/doi/10.5555/3454287.3455008)
+* [ResNet50](https://doi.org/10.48550/arXiv.1512.03385)
+* [ShuffleNet](https://doi.org/10.48550/arXiv.1807.11164)
+* [wandb.ai](https://wandb.ai/site)
