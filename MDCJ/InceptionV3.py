@@ -446,6 +446,6 @@ if __name__ == '__main__':
     print("Using device:", device)
     if not os.path.exists('Best models'):
         os.makedirs('Best models')
-    print("\nStarting main")
+    print("\nStarting main\n")
     main()
     print("Main complete")
