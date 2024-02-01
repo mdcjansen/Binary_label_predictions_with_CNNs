@@ -201,7 +201,7 @@ def log_metrics(metrics, split, prefix, loss):
 
 
 def create_model(batch_norm, dropout_rate):
-    model = shufflenet_v2_x1_0(pretrained=True)
+    model = shufflenet_v2_x1_0(weights="ShuffleNet_V2_X1_0_Weights.DEFAULT")
     for param in model.parameters():
         param.requires_grad = False
     num_ftrs = model.fc.in_features
