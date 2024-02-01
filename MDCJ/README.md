@@ -24,7 +24,6 @@ of the CNNs scripts were used to train the models.
 * [binary classification xlsx](#binary-classification-xlsx)
 * [CNN output](#CNN-output)
 * [Acknowledgements](#Acknowledgements)
-* [License](#License)
 
 
 ## Requirements
