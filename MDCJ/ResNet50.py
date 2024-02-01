@@ -201,7 +201,7 @@ def log_metrics(metrics, split, prefix, loss):
 
 
 def create_model(batch_norm, dropout_rate):
-    model = resnet50(pretrained=True)
+    model = resnet50(weights="ResNet50_Weights.DEFAULT")
     for param in model.parameters():
         param.requires_grad = False
     num_ftrs = model.classifier.in_features
