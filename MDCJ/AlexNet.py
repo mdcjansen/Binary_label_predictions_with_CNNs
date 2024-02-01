@@ -201,7 +201,7 @@ def log_metrics(metrics, split, prefix, loss):
 
 
 def create_model(batch_norm, dropout_rate):
-    model = alexnet(pretrained=True)
+    model = alexnet(weights="AlexNet_Weights.DEFAULT")
     for param in model.parameters():
         param.requires_grad = False
     num_ftrs = model.classifier[6].in_features
