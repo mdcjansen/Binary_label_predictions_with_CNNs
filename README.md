@@ -1,5 +1,9 @@
 # Binary label predictions with CNNs
 
+This repository is archived as of 21/05/2024.
+A more organised and updated version can be found [here](https://github.com/mdcjansen/CNN)
+Currently this repository will exist as a product of my thesis in addition to keeping the old updates of these scripts visible.
+
 This repository contains a collection of codes that trains CNNs in predicting binary labels from input images,
 preprocesses data for training CNNs, and utility scripts that aid in either performing the predictions or preprocessing data.
 
